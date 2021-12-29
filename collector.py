@@ -1,4 +1,5 @@
 import plugins.collector.collector_plugin as col
+import spoty.utils
 import click
 
 
@@ -19,6 +20,7 @@ def subscribe(playlist_ids, mirror_name):
 Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
     """
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     col.subscribe(playlist_ids, mirror_name)
 
 
@@ -30,6 +32,7 @@ def unsubscribe(playlist_ids, remove_mirror):
     """
 Unsubscribe from the specified playlists (by playlist ID or URI).
     """
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     col.unsubscribe(playlist_ids, remove_mirror)
 
 
@@ -42,6 +45,7 @@ Unsubscribe from all specified playlists.
     """
     col.unsubscribe_all(remove_mirror)
 
+
 @collector.command("unsubscribe-mirror")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--remove-mirror', '-r', is_flag=True,
@@ -51,6 +55,7 @@ def unsubscribe_mirror(playlist_ids, remove_mirror):
 Unsubscribe from playlists for which the specified mirror playlists has been created.
 Specify IDs or URIs of mirror playlists.
     """
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     col.unsubscribe_mirror(playlist_ids, remove_mirror)
 
 
@@ -75,6 +80,7 @@ When executed, the following will happen:
     """
     col.update()
 
+
 @collector.command("listened")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--like', '-l', is_flag=True,
@@ -92,4 +98,5 @@ When you run this command, the following will happen:
 - If you added a --like flag, all tracks will be liked. Thus, when you see a like in any Spotify playlist, you will know that you have already heard this track.
 - If it's a playlist from your library, it will be removed. You can cancel this step with a --do-not-remove flag.
     """
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     col.listened(playlist_ids, like, do_not_remove, find_copies)
