@@ -92,7 +92,7 @@ Update all subscriptions.
 When executed, the following will happen:
 - A mirror playlist will be created in your library for each subscription if not already created.
 - New tracks from subscribed playlists will be added to exist mirror playlists. Tracks that you have already listened to will not be added to the mirrored playlist.
-- All tracks with likes will be removed from mirror playlists.
+- All tracks with likes will be added to listened list and removed from mirror playlists.
     """
     col.update()
 
