@@ -87,13 +87,13 @@ def unsubscribe(playlist_ids: list, remove_mirror=False, remove_tracks=False):
         playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
         playlist = spotify_api.get_playlist(playlist_id)
+        playlist_name = ""
         if playlist is None:
-            click.echo(f'Playlist "{playlist_id}" not found.')
-            continue
+            playlist_name=playlist['name']
 
         all_subs = get_subscriptions(mirrors)
         if playlist_id not in all_subs:
-            click.echo(f'Not subscribed to playlist "{playlist["name"]}" ({playlist_id}). Skipped.')
+            click.echo(f'Not subscribed to playlist "{playlist_name}" ({playlist_id}). Skipped.')
             continue
 
         for mirror, subs in mirrors.items():
@@ -104,7 +104,7 @@ def unsubscribe(playlist_ids: list, remove_mirror=False, remove_tracks=False):
                     remove_mirror_if_empty(mirror)
                 if remove_tracks:
                     remove_tracks_from_mirror(mirror, playlist_id)
-                click.echo(f'Unsubscribed from playlist "{playlist["name"]}".')
+                click.echo(f'Unsubscribed from playlist "{playlist_name}".')
 
     write_mirrors(mirrors)
 
@@ -135,17 +135,20 @@ def unsubscribe_mirrors(playlist_ids: list, remove_mirror=False):
     return all_unsubscribed
 
 
-def list():
-    mirrors=read_mirrors()
+def list(fast=True):
+    mirrors = read_mirrors()
     all_playlists = get_subscriptions(mirrors)
     for mirror, playlist_ids in mirrors.items():
         click.echo(f'Mirror "{mirror}":')
         for playlist_id in playlist_ids:
-            playlist = spotify_api.get_playlist(playlist_id)
-            if playlist is None:
-                click.echo(f'  Playlist "{playlist_id}" not found.')
-                continue
-            click.echo(f'  {playlist_id} "{playlist["name"]}"')
+            if fast:
+                click.echo(f'  {playlist_id}')
+            else:
+                playlist = spotify_api.get_playlist(playlist_id)
+                if playlist is None:
+                    click.echo(f'  Playlist "{playlist_id}" not found.')
+                    continue
+                click.echo(f'  {playlist_id} "{playlist["name"]}"')
     click.echo(f'Total {len(all_playlists)} playlists in {len(mirrors.items())} mirrors.')
 
 

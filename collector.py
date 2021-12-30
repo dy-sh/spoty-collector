@@ -74,11 +74,13 @@ Specify IDs or URIs of mirror playlists.
 
 
 @collector.command("list")
-def list():
+@click.option('--fast', '-f', is_flag=True,
+              help='Do not request playlist names (fast).')
+def list(fast):
     """
 Display a list of mirrors and subscribed playlists.
     """
-    col.list()
+    col.list(fast)
 
 
 @collector.command("update")
