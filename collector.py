@@ -105,14 +105,21 @@ When executed, the following will happen:
               help='Like all tracks in playlist.')
 @click.option('--find-copies', '-c', is_flag=True,
               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
-def listened(playlist_ids, like, do_not_remove, find_copies):
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete playlist confirmation.')
+def listened(playlist_ids, like, do_not_remove, find_copies, confirm):
     """
 Mark playlist as listened to (by playlist ID or URI).
 It can be a mirror playlist or a regular playlist from your library or another user's playlist.
 When you run this command, the following will happen:
 - All tracks will be added to the list, which containing all the tracks you've listened to. This list is stored in a file in the plugin directory.
 - If you added a --like flag, all tracks will be liked. Thus, when you see a like in any Spotify playlist, you will know that you have already heard this track.
-- If it's a playlist from your library, it will be removed. You can cancel this step with a --do-not-remove flag.
+- If playlist exist in your library, it will be removed. You can cancel this step with a --do-not-remove flag.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    col.listened(playlist_ids, like, do_not_remove, find_copies)
+    tags_list, liked_tracks, deleted_playlists = col.listened(playlist_ids, like, do_not_remove, find_copies, confirm)
+    click.echo(f'{len(tags_list)} tracks added to listened list.')
+    if len(liked_tracks) > 0:
+        click.echo(f'{len(liked_tracks)} tracks liked.')
+    if len(deleted_playlists) > 0:
+        click.echo(f'{len(deleted_playlists)} playlists deleted from library.')

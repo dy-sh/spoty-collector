@@ -1,9 +1,11 @@
 from spoty import plugins_path
 from spoty import spotify_api
+from spoty import csv_playlist
 import os.path
 import click
 
 mirrors_file_name = os.path.abspath(os.path.join(plugins_path, 'collector', 'mirrors.txt'))
+listened_file_name = os.path.abspath(os.path.join(plugins_path, 'collector', 'listened.csv'))
 
 
 def read_mirrors():
@@ -89,7 +91,7 @@ def unsubscribe(playlist_ids: list, remove_mirror=False, remove_tracks=False):
         playlist = spotify_api.get_playlist(playlist_id)
         playlist_name = ""
         if playlist is None:
-            playlist_name=playlist['name']
+            playlist_name = playlist['name']
 
         all_subs = get_subscriptions(mirrors)
         if playlist_id not in all_subs:
@@ -156,5 +158,32 @@ def update():
     return None
 
 
-def listened(playlist_ids: list, like=False, do_not_remove=False, find_copies=False):
-    return None
+def listened(playlist_ids: list, like_all_tracks=False, do_not_remove=False, find_copies=False, confirm=False):
+    all_tags_list=[]
+    all_liked_tracks=[]
+    all_deleted_playlists=[]
+
+    for playlist_id in playlist_ids:
+        playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
+        if playlist is None:
+            click.echo(f'  Playlist "{playlist_id}" not found.')
+            continue
+
+        tracks = playlist["tracks"]["items"]
+        tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+        all_tags_list.extend(tags_list)
+        csv_playlist.write_tags_to_csv(tags_list, listened_file_name, True)
+
+
+        if like_all_tracks:
+            ids = spotify_api.get_track_ids(tracks)
+            not_liked_track_ids = spotify_api.get_not_liked_track_ids(ids)
+            all_liked_tracks.extend(not_liked_track_ids)
+            spotify_api.add_tracks_to_liked(not_liked_track_ids)
+
+        if not do_not_remove:
+            res = spotify_api.delete_playlist(playlist_id, confirm)
+            if res:
+                all_deleted_playlists.append(playlist_id)
+
+    return all_tags_list, all_liked_tracks, all_deleted_playlists
