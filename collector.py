@@ -13,18 +13,23 @@ Plugin for collecting music in spotify.
 
 @collector.command("sub")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--mirror-name', '--m',
+@click.option('--mirror-name', '--n',
               help='A mirror playlist with the specified name will be added to the library. You can subscribe to multiple playlists by merging them into one mirror. If not specified, the playlist name will be used as mirror name.')
-def subscribe(playlist_ids, mirror_name):
+@click.option('--update', '-u', is_flag=True,
+              help='Execute "update" command for this mirror after subscription.')
+@click.pass_context
+def subscribe(ctx, playlist_ids, mirror_name, update):
     """
 Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new_subs = col.subscribe(playlist_ids, mirror_name)
+    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscriptions(mirrors)
     click.echo(f'{len(new_subs)} new playlists added to subscriptions (total subscriptions: {len(all_subs)}).')
+    if update:
+        ctx.invoke(update_mirrors, mirror_id=new_mirrors)
 
 
 @collector.command("unsub")
@@ -82,7 +87,7 @@ Specify IDs or URIs of mirror playlists.
 @collector.command("list")
 @click.option('--fast', '-f', is_flag=True,
               help='Do not request playlist names (fast).')
-def list(fast):
+def list_mirrors(fast):
     """
 Display a list of mirrors and subscribed playlists.
     """
@@ -90,13 +95,13 @@ Display a list of mirrors and subscribed playlists.
 
 
 @collector.command("update")
-@click.option('--do-not-remove', '-r', is_flag=True,
+@click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for delete mirror playlist confirmation.')
 @click.option('--mirror-id', '---m', multiple=True,
               help='Update only specified mirrors.')
-def update(do_not_remove, confirm, mirror_id):
+def update_mirrors(do_not_remove, confirm, mirror_id):
     """
 Update all subscriptions.
 
@@ -114,7 +119,7 @@ When executed, the following will happen:
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--like', '-l', is_flag=True,
               help='Like all tracks in playlist.')
-@click.option('--do-not-remove', '-r', is_flag=True,
+@click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove listened playlists.')
 @click.option('--find-copies', '-c', is_flag=True,
               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
@@ -139,7 +144,7 @@ When you run this command, the following will happen:
 
 
 @collector.command("clean")
-def clean():
+def clean_listened():
     """
 Delete duplicates in listened list.
     """
