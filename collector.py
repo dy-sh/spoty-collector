@@ -11,7 +11,7 @@ Plugin for collecting music in spotify.
     pass
 
 
-@collector.command("subscribe")
+@collector.command("sub")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--mirror-name', '--m',
               help='A mirror playlist with the specified name will be added to the library. You can subscribe to multiple playlists by merging them into one mirror. If not specified, the playlist name will be used as mirror name.')
@@ -21,22 +21,30 @@ Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    col.subscribe(playlist_ids, mirror_name)
+    new_subs = col.subscribe(playlist_ids, mirror_name)
+    mirrors=col.read_mirrors()
+    all_subs=col.get_subscriptions(mirrors)
+    click.echo(f'{len(new_subs)} new playlists added to subscriptions (total subscriptions: {len(all_subs)}).')
 
 
-@collector.command("unsubscribe")
+@collector.command("unsub")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library if there are no other subscriptions with the same mirror name.')
-def unsubscribe(playlist_ids, remove_mirror):
+@click.option('--remove-tracks', '-t', is_flag=True,
+              help='Remove tracks in mirror playlists that exist in unsubscribed playlists.')
+def unsubscribe(playlist_ids, remove_mirror, remove_tracks):
     """
 Unsubscribe from the specified playlists (by playlist ID or URI).
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    col.unsubscribe(playlist_ids, remove_mirror)
+    unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, remove_tracks)
+    mirrors=col.read_mirrors()
+    all_subs=col.get_subscriptions(mirrors)
+    click.echo(f'Total {len(unsubscribed)} playlists unsubscribed (total subscriptions remain: {len(all_subs)}).')
 
 
-@collector.command("unsubscribe-all")
+@collector.command("unsub-all")
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library.')
 def unsubscribe_all(remove_mirror):
@@ -46,7 +54,7 @@ Unsubscribe from all specified playlists.
     col.unsubscribe_all(remove_mirror)
 
 
-@collector.command("unsubscribe-mirror")
+@collector.command("unsub-mirror")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library.')
