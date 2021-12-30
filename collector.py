@@ -84,7 +84,9 @@ Display a list of mirrors and subscribed playlists.
 
 
 @collector.command("update")
-def update():
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete mirror playlist confirmation.')
+def update(confirm):
     """
 Update all subscriptions.
 
@@ -94,7 +96,7 @@ When executed, the following will happen:
 - New tracks from subscribed playlists will be added to exist mirror playlists. Tracks that you have already listened to will not be added to the mirrored playlist.
 - All tracks with likes will be added to listened list and removed from mirror playlists.
     """
-    col.update()
+    col.update(confirm)
 
 
 @collector.command("listened")
