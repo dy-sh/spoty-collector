@@ -46,7 +46,7 @@ def read_listened():
     if not os.path.isfile(listened_file_name):
         return []
 
-    tags_list = csv_playlist.read_tags_from_csv(listened_file_name, False)
+    tags_list = csv_playlist.read_tags_from_csv(listened_file_name, False, False)
     return tags_list
 
 
