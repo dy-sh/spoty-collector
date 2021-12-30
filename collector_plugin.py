@@ -42,6 +42,40 @@ def get_subscriptions(mirrors: dict):
     return all_subs
 
 
+def read_listened():
+    tags_list = csv_playlist.read_tags_from_csv(listened_file_name, False)
+    return tags_list
+
+
+def write_listened(tags_list, append):
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # clean unnecessary tags
+    for tags in tags_list:
+        tags['SPOTY_TRACK_LISTENED'] = now
+        if 'SPOTY_TRACK_ADDED' in tags:
+            del tags['SPOTY_TRACK_ADDED']
+        if 'WWWAUDIOFILE' in tags:
+            del tags['WWWAUDIOFILE']
+        if 'TRACK' in tags:
+            del tags['TRACK']
+        if 'EXPLICIT' in tags:
+            del tags['EXPLICIT']
+        if 'SPOTY_TRACK_ID' in tags:
+            del tags['SPOTY_TRACK_ID']
+
+    csv_playlist.write_tags_to_csv(tags_list, listened_file_name, append)
+
+
+def clean_listened():
+    tags_list = read_listened()
+    good, duplicates = utils.remove_duplicated_tags(tags_list, ['SPOTY_TRACK_ID'], False)
+    if len(duplicates) > 0:
+        write_listened(good, False)
+    return good, duplicates
+
+
+
 def remove_mirror_if_empty(mirror):
     pass
 
@@ -190,36 +224,3 @@ def listened(playlist_ids: list, like_all_tracks=False, do_not_remove=False, fin
 
     return all_tags_list, all_liked_tracks, all_deleted_playlists
 
-
-def read_listened():
-    tags_list = csv_playlist.read_tags_from_csv(listened_file_name, False)
-    return tags_list
-
-
-def write_listened(tags_list, append):
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    # clean unnecessary tags
-    for tags in tags_list:
-        tags['SPOTY_TRACK_LISTENED'] = now
-        if 'SPOTY_TRACK_ADDED' in tags:
-            del tags['SPOTY_TRACK_ADDED']
-        if 'WWWAUDIOFILE' in tags:
-            del tags['WWWAUDIOFILE']
-        if 'TRACK' in tags:
-            del tags['TRACK']
-        if 'EXPLICIT' in tags:
-            del tags['EXPLICIT']
-        if 'SPOTY_TRACK_ID' in tags:
-            del tags['SPOTY_TRACK_ID']
-
-
-    csv_playlist.write_tags_to_csv(tags_list, listened_file_name, append)
-
-
-def clean_listened():
-    tags_list = read_listened()
-    good, duplicates = utils.remove_duplicated_tags(tags_list, ['SPOTY_TRACK_ID'], False)
-    if len(duplicates) > 0:
-        write_listened(good, False)
-    return good, duplicates
