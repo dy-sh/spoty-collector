@@ -30,15 +30,17 @@ Next, use "update" command to create mirrors and update it (see "update --help")
 @collector.command("unsub")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--remove-mirror', '-r', is_flag=True,
-              help='Remove mirror playlists from the library if there are no other subscriptions with the same mirror name.')
+              help='Remove mirror playlists from the library.')
 @click.option('--remove-tracks', '-t', is_flag=True,
               help='Remove tracks in mirror playlists that exist in unsubscribed playlists.')
-def unsubscribe(playlist_ids, remove_mirror, remove_tracks):
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete mirror playlist confirmation.')
+def unsubscribe(playlist_ids, remove_mirror, remove_tracks, confirm):
     """
 Unsubscribe from the specified playlists (by playlist ID or URI).
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, remove_tracks)
+    unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, remove_tracks, confirm)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscriptions(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
@@ -47,27 +49,31 @@ Unsubscribe from the specified playlists (by playlist ID or URI).
 @collector.command("unsub-all")
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library.')
-def unsubscribe_all(remove_mirror):
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete mirror playlist confirmation.')
+def unsubscribe_all(remove_mirror, confirm):
     """
 Unsubscribe from all specified playlists.
     """
-    unsubscribed = col.unsubscribe_all(remove_mirror)
+    unsubscribed = col.unsubscribe_all(remove_mirror, confirm)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscriptions(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
 @collector.command("unsub-mirror")
-@click.argument("playlist_ids", nargs=-1)
+@click.argument("mirror_playlist_ids", nargs=-1)
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library.')
-def unsubscribe_mirror(playlist_ids, remove_mirror):
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete mirror playlist confirmation.')
+def unsubscribe_mirror(mirror_playlist_ids, remove_mirror, confirm):
     """
 Unsubscribe from playlists for which the specified mirror playlists has been created.
 Specify IDs or URIs of mirror playlists.
     """
-    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    unsubscribed = col.unsubscribe_mirrors(playlist_ids, remove_mirror)
+    mirror_playlist_ids = spoty.utils.tuple_to_list(mirror_playlist_ids)
+    unsubscribed = col.unsubscribe_mirrors(mirror_playlist_ids, remove_mirror, confirm)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscriptions(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
@@ -84,9 +90,11 @@ Display a list of mirrors and subscribed playlists.
 
 
 @collector.command("update")
+@click.option('--do-not-remove', '-r', is_flag=True,
+              help='Do not remove mirror playlists.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for delete mirror playlist confirmation.')
-def update(confirm):
+def update(do_not_remove, confirm):
     """
 Update all subscriptions.
 
@@ -96,7 +104,7 @@ When executed, the following will happen:
 - New tracks from subscribed playlists will be added to exist mirror playlists. Tracks that you have already listened to will not be added to the mirrored playlist.
 - All tracks with likes will be added to listened list and removed from mirror playlists.
     """
-    col.update(confirm)
+    col.update(not do_not_remove, confirm)
 
 
 @collector.command("listened")
@@ -104,7 +112,7 @@ When executed, the following will happen:
 @click.option('--like', '-l', is_flag=True,
               help='Like all tracks in playlist.')
 @click.option('--do-not-remove', '-r', is_flag=True,
-              help='Like all tracks in playlist.')
+              help='Do not remove listened playlists.')
 @click.option('--find-copies', '-c', is_flag=True,
               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
 @click.option('--confirm', '-y', is_flag=True,

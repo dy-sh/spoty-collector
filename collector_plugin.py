@@ -87,14 +87,6 @@ def get_not_listened_tracks(new_tags_list: list):
     return new_tags_list
 
 
-def remove_mirror_if_empty(mirror):
-    pass
-
-
-def remove_tracks_from_mirror(mirror, playlist_id):
-    pass
-
-
 def subscribe(playlist_ids: list, mirror_name=None):
     mirrors = read_mirrors()
     subscribed = []
@@ -129,31 +121,55 @@ def subscribe(playlist_ids: list, mirror_name=None):
     return subscribed
 
 
-def unsubscribe(playlist_ids: list, remove_mirror=False, remove_tracks=False):
+def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, remove_tracks_from_mirror=False, confirm=False):
     mirrors = read_mirrors()
     unsubscribed = []
 
-    for playlist_id in playlist_ids:
-        playlist_id = spotify_api.parse_playlist_id(playlist_id)
+    if remove_mirrors or remove_tracks_from_mirror:
+        user_playlists = spotify_api.get_list_of_playlists()
 
-        playlist = spotify_api.get_playlist(playlist_id)
+        for sub_playlist_id in sub_playlist_ids:
+            sub_playlist_id = spotify_api.parse_playlist_id(sub_playlist_id)
+
+            for mirror_name, sub_playlists in mirrors.items():
+                if sub_playlist_id in sub_playlists:
+                    # get mirror playlist
+                    mirror_playlist_id = None
+                    for playlist in user_playlists:
+                        if playlist['name'] == mirror_name:
+                            mirror_playlist_id = playlist['id']
+
+                    if mirror_playlist_id is not None:
+                        clean_mirror(mirror_playlist_id, True, confirm)
+
+                        if remove_mirrors:
+                            spotify_api.delete_playlist(mirror_playlist_id, confirm)
+
+                        elif remove_tracks_from_mirror:
+                            sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
+                            sub_tracks = sub_playlist["tracks"]["items"]
+                            # sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+                            track_ids = spotify_api.get_track_ids(sub_tracks)
+                            spotify_api.remove_tracks_from_playlist(mirror_playlist_id, track_ids)
+
+    for sub_playlist_id in sub_playlist_ids:
+        sub_playlist_id = spotify_api.parse_playlist_id(sub_playlist_id)
+
+        playlist = spotify_api.get_playlist(sub_playlist_id)
         playlist_name = ""
-        if playlist is None:
+        if playlist is not None:
             playlist_name = playlist['name']
 
         all_subs = get_subscriptions(mirrors)
-        if playlist_id not in all_subs:
-            click.echo(f'Not subscribed to playlist "{playlist_name}" ({playlist_id}). Skipped.')
+        if sub_playlist_id not in all_subs:
+            click.echo(f'Not subscribed to playlist "{playlist_name}" ({sub_playlist_id}). Skipped.')
             continue
 
-        for mirror, subs in mirrors.items():
-            if playlist_id in subs:
-                mirrors[mirror].remove(playlist_id)
-                unsubscribed.append(playlist_id)
-                if remove_mirror:
-                    remove_mirror_if_empty(mirror)
-                if remove_tracks:
-                    remove_tracks_from_mirror(mirror, playlist_id)
+        for mirror_name, sub_playlists in mirrors.items():
+            if sub_playlist_id in sub_playlists:
+                mirrors[mirror_name].remove(sub_playlist_id)
+                unsubscribed.append(sub_playlist_id)
+
                 click.echo(f'Unsubscribed from playlist "{playlist_name}".')
 
     write_mirrors(mirrors)
@@ -161,17 +177,17 @@ def unsubscribe(playlist_ids: list, remove_mirror=False, remove_tracks=False):
     return unsubscribed
 
 
-def unsubscribe_all(remove_mirror=False):
+def unsubscribe_all(remove_mirror=False, confirm=False):
     mirrors = read_mirrors()
     subs = get_subscriptions(mirrors)
-    unsubscribed = unsubscribe(subs, remove_mirror)
+    unsubscribed = unsubscribe(subs, remove_mirror, False, confirm)
     return unsubscribed
 
 
-def unsubscribe_mirrors(playlist_ids: list, remove_mirror=False):
+def unsubscribe_mirrors(mirror_playlist_ids: list, remove_mirrors=False, confirm=False):
     mirrors = read_mirrors()
     all_unsubscribed = []
-    for playlist_id in playlist_ids:
+    for playlist_id in mirror_playlist_ids:
         mirror_playlist = spotify_api.get_playlist(playlist_id)
         if mirror_playlist is None:
             click.echo(f'Mirror playlist "{playlist_id}" not found.')
@@ -180,7 +196,7 @@ def unsubscribe_mirrors(playlist_ids: list, remove_mirror=False):
         if mirror not in mirrors:
             click.echo(f'Playlist "{mirror}" ({playlist_id}) is not a mirror playlist.')
             continue
-        unsubscribed = unsubscribe(mirrors[mirror], remove_mirror)
+        unsubscribed = unsubscribe(mirrors[mirror], remove_mirrors, False, confirm)
         all_unsubscribed.extend(unsubscribed)
     return all_unsubscribed
 
@@ -202,7 +218,7 @@ def list(fast=True):
     click.echo(f'Total {len(all_playlists)} playlists in {len(mirrors.items())} mirrors.')
 
 
-def update(confirm=False):
+def update(remove_empty_mirrors=False, confirm=False):
     mirrors = read_mirrors()
     if len(mirrors.items()) == 0:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
@@ -234,30 +250,15 @@ def update(confirm=False):
                 mirror_playlist_id = playlist['id']
 
         if mirror_playlist_id is not None:
-            # get tracks from mirror
-            mirror_playlist = spotify_api.get_playlist_with_full_list_of_tracks(mirror_playlist_id)
-            mirror_tracks = mirror_playlist["tracks"]["items"]
-            mirror_tags_list = spotify_api.read_tags_from_spotify_tracks(mirror_tracks)
+            # remove liked tracks from mirror, remove empty mirror
+            remove_mirror = remove_empty_mirrors
+            if len(new_sub_tags_list) > 0:
+                remove_mirror = False
+            mirror_tags_list = clean_mirror(mirror_playlist_id, remove_mirror, confirm)
 
-            # remove liked tracks from mirror
-            liked_mirror_tags_list = spotify_api.get_liked_tags_list(mirror_tags_list)
-            add_tracks_to_listened(liked_mirror_tags_list, True)
-            liked_ids = spotify_api.get_track_ids_from_tags_list(liked_mirror_tags_list)
-            spotify_api.remove_tracks_from_playlist(mirror_playlist_id, liked_ids)
-            mirror_tags_list, removed = utils.remove_exist_tags(liked_mirror_tags_list, mirror_tags_list,
-                                                                ['SPOTIFY_TRACK_ID'])
-            if len(removed) > 0:
-                click.echo(f'{len(removed)} liked tracks added to listened and removed from mirror "{mirror_name}"')
-
-            # remove track already exist in mirror
+            # remove tracks already exist in mirror
             new_sub_tags_list, already_exist = utils.remove_exist_tags(mirror_tags_list, new_sub_tags_list,
                                                                        ['SPOTIFY_TRACK_ID'])
-
-            # remove empty mirror
-            if len(new_sub_tags_list) == 0 and len(mirror_tags_list) == 0:
-                res = spotify_api.delete_playlist(mirror_playlist_id, confirm)
-                if res:
-                    click.echo(f'Mirror playlist "{mirror_name}" is empty and has been removed from library.')
 
         if len(new_sub_tags_list) > 0:
             # create new mirror playlist
@@ -271,6 +272,33 @@ def update(confirm=False):
                 spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
             if len(tracks_added) > 0:
                 click.echo(f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
+
+
+def clean_mirror(mirror_playlist_id, remove_empty_mirror=True, confirm=False):
+    # get tracks from mirror
+    mirror_playlist = spotify_api.get_playlist_with_full_list_of_tracks(mirror_playlist_id)
+    mirror_name = mirror_playlist['name']
+    mirror_tracks = mirror_playlist["tracks"]["items"]
+    mirror_tags_list = spotify_api.read_tags_from_spotify_tracks(mirror_tracks)
+
+    # remove liked tracks from mirror
+    liked_mirror_tags_list = spotify_api.get_liked_tags_list(mirror_tags_list)
+    add_tracks_to_listened(liked_mirror_tags_list, True)
+    liked_ids = spotify_api.get_track_ids_from_tags_list(liked_mirror_tags_list)
+    spotify_api.remove_tracks_from_playlist(mirror_playlist_id, liked_ids)
+    mirror_tags_list, removed = utils.remove_exist_tags(liked_mirror_tags_list, mirror_tags_list,
+                                                        ['SPOTIFY_TRACK_ID'])
+    if len(removed) > 0:
+        click.echo(f'{len(removed)} liked tracks added to listened and removed from mirror "{mirror_name}"')
+
+    # remove empty mirror
+    if remove_empty_mirror:
+        if len(mirror_tags_list) == 0:
+            res = spotify_api.delete_playlist(mirror_playlist_id, confirm)
+            if res:
+                click.echo(f'Mirror playlist "{mirror_name}" is empty and has been removed from library.')
+
+    return mirror_tags_list
 
 
 def listened(playlist_ids: list, like_all_tracks=False, do_not_remove=False, find_copies=False, confirm=False):
