@@ -123,3 +123,16 @@ When you run this command, the following will happen:
         click.echo(f'{len(liked_tracks)} tracks liked.')
     if len(deleted_playlists) > 0:
         click.echo(f'{len(deleted_playlists)} playlists deleted from library.')
+
+
+@collector.command("clean")
+def clean():
+    """
+Delete duplicates in listened list.
+    """
+    good, duplicates = col.clean_listened()
+    total_count = len(good) + len(duplicates)
+    if len(duplicates) > 0:
+        click.echo(f'{len(duplicates)} duplicated tracks removed (listened tracks remain: {len(good)}).')
+    else:
+        click.echo(f'No duplicated tracks found (total listened tracks: {total_count}).')
