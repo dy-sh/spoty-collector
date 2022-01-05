@@ -135,12 +135,35 @@ When you run this command, the following will happen:
 - If playlist exist in your library, it will be removed. You can cancel this step with a --do-not-remove flag.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    tags_list, liked_tracks, deleted_playlists = col.listened(playlist_ids, like, do_not_remove, find_copies, confirm)
-    click.echo(f'{len(tags_list)} tracks added to listened list.')
+    tags_list, liked_tracks, deleted_playlists, added_tags, already_listened_tags \
+        = col.listened(playlist_ids, like, do_not_remove, find_copies, confirm)
+    click.echo(f'{len(tags_list)} tracks total in specified playlists.')
     if len(liked_tracks) > 0:
         click.echo(f'{len(liked_tracks)} tracks liked.')
     if len(deleted_playlists) > 0:
         click.echo(f'{len(deleted_playlists)} playlists deleted from library.')
+    if len(already_listened_tags) > 0:
+        click.echo(f'{len(already_listened_tags)} tracks already in listened list.')
+    click.echo(f'{len(added_tags)} tracks added to listened list.')
+
+
+@collector.command("ok")
+@click.argument("playlist_ids", nargs=-1)
+@click.option('--like', '-l', is_flag=True,
+              help='Like all tracks in playlist.')
+@click.option('--do-not-remove', '-R', is_flag=True,
+              help='Do not remove listened playlists.')
+@click.option('--find-copies', '-c', is_flag=True,
+              help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete playlist confirmation.')
+@click.pass_context
+def ok(ctx, playlist_ids, like, do_not_remove, find_copies, confirm):
+    """
+Alias for "listened" command (to type shorter)
+    """
+    ctx.invoke(listened, playlist_ids=playlist_ids, like=like, do_not_remove=do_not_remove, find_copies=find_copies,
+               confirm=confirm)
 
 
 @collector.command("clean")
