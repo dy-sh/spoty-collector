@@ -381,3 +381,11 @@ def unlike_all_listened(ctx):
 Unlike all listened tracks.
     """
     ctx.invoke(like_import, file_names=[col.listened_file_name], unlike=True)
+
+
+@collector.command("sort-mirrors-list")
+def sort_mirrors():
+    """
+Sort mirrors in the mirrors file.
+    """
+    col.sort_mirrors()

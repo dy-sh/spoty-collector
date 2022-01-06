@@ -43,11 +43,13 @@ LISTENED_LIST_TAGS = [
 def read_mirrors():
     if not os.path.isfile(mirrors_file_name):
         return {}
-    with open(mirrors_file_name, 'r') as file:
+    with open(mirrors_file_name, 'r', encoding='utf-8-sig') as file:
         mirrors = {}
         lines = file.readlines()
         for line in lines:
             line = line.rstrip("\n").strip()
+            if line == "":
+                continue
             playlist_id = line.split(':')[0]
             mirror = line.split(':', 1)[1]
             if mirror not in mirrors:
@@ -57,7 +59,7 @@ def read_mirrors():
 
 
 def write_mirrors(mirrors: dict):
-    with open(mirrors_file_name, 'w') as file:
+    with open(mirrors_file_name, 'w', encoding='utf-8-sig') as file:
         for mirror_name, playlist_ids in mirrors.items():
             for playlist_id in playlist_ids:
                 file.write(f'{playlist_id}:{mirror_name}\n')
@@ -456,7 +458,7 @@ def clean_playlists(playlist_ids, no_empty_playlists=False, no_liked_tracks=Fals
     all_deleted_playlists = []
     all_duplicates_removed = []
     all_listened_removed = []
-    all_added_to_listened=[]
+    all_added_to_listened = []
 
     bar_showed = len(playlist_ids) > 1
     if bar_showed:
@@ -532,7 +534,7 @@ def clean_playlists(playlist_ids, no_empty_playlists=False, no_liked_tracks=Fals
     if bar_showed:
         click.echo()  # new line
 
-    return all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists,all_added_to_listened
+    return all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists, all_added_to_listened
 
 
 def delete(playlist_ids, confirm):
@@ -560,3 +562,9 @@ def delete(playlist_ids, confirm):
     added_tracks, already_listened_tracks = add_tracks_to_listened(all_liked_tracks, True)
 
     return all_tags_list, all_liked_tracks, all_deleted_playlists, added_tracks, already_listened_tracks
+
+
+def sort_mirrors():
+    mirrors = read_mirrors()
+    mirrors = dict(sorted(mirrors.items()))
+    write_mirrors(mirrors)
