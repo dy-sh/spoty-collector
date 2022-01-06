@@ -321,67 +321,78 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None):
     all_sub_tracks = []
     all_liked_added_to_listened = []
     all_added_to_mirrors = []
-    for mirror_name, sub_playlists_ids in mirrors.items():
-        # get mirror playlist
-        mirror_playlist_id = None
-        for playlist in user_playlists:
-            if playlist['name'] == mirror_name:
-                mirror_playlist_id = playlist['id']
 
-        if mirror_playlist_id is not None and mirror_ids is not None and len(mirror_ids) > 0:
-            if mirror_playlist_id not in mirror_ids:
-                continue
+    summery = []
 
-        # get all tracks from subscribed playlists
-        new_sub_tags_list = []
-        for sub_id in sub_playlists_ids:
-            sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_id)
-            sub_tracks = sub_playlist["tracks"]["items"]
-            sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
-            new_sub_tags_list.extend(sub_tags_list)
-            all_sub_tracks.extend(sub_tags_list)
+    with click.progressbar(length=len(subs)+1, label=f'Updating {len(mirrors)} mirrors for {len(subs)} subscribed playlists') as bar:
+        for mirror_name, sub_playlists_ids in mirrors.items():
+            # get mirror playlist
+            mirror_playlist_id = None
+            for playlist in user_playlists:
+                if playlist['name'] == mirror_name:
+                    mirror_playlist_id = playlist['id']
 
-        # remove duplicates
-        new_sub_tags_list, duplicates = utils.remove_duplicated_tags(new_sub_tags_list, ['SPOTIFY_TRACK_ID'])
-        all_duplicates.extend(duplicates)
+            if mirror_playlist_id is not None and mirror_ids is not None and len(mirror_ids) > 0:
+                if mirror_playlist_id not in mirror_ids:
+                    continue
 
-        # remove already listened tracks
-        new_sub_tags_list, listened = get_not_listened_tracks(new_sub_tags_list)
-        all_already_listened.extend(listened)
+            # get all tracks from subscribed playlists
+            new_sub_tags_list = []
+            for sub_id in sub_playlists_ids:
+                sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_id)
+                sub_tracks = sub_playlist["tracks"]["items"]
+                sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+                new_sub_tags_list.extend(sub_tags_list)
+                all_sub_tracks.extend(sub_tags_list)
+                bar.update(1)
 
-        # remove liked tracks
-        liked, not_liked = spotify_api.get_liked_tags_list(new_sub_tags_list)
-        all_liked.extend(liked)
-        new_sub_tags_list = not_liked
+            # remove duplicates
+            new_sub_tags_list, duplicates = utils.remove_duplicated_tags(new_sub_tags_list, ['SPOTIFY_TRACK_ID'])
+            all_duplicates.extend(duplicates)
 
-        mirror_tags_list = []
-        if mirror_playlist_id is not None:
+            # remove already listened tracks
+            new_sub_tags_list, listened = get_not_listened_tracks(new_sub_tags_list)
+            all_already_listened.extend(listened)
+
+            # remove liked tracks
+            liked, not_liked = spotify_api.get_liked_tags_list(new_sub_tags_list)
+            all_liked.extend(liked)
+            new_sub_tags_list = not_liked
+
+            mirror_tags_list = []
             if mirror_playlist_id is not None:
-                # remove liked tracks from mirror, remove empty mirror
-                remove_mirror = remove_empty_mirrors
-                if len(new_sub_tags_list) > 0:
-                    remove_mirror = False
-                mirror_tags_list, removed = clean_mirror(mirror_playlist_id, remove_mirror, confirm)
-                all_liked_added_to_listened.extend(removed)
+                if mirror_playlist_id is not None:
+                    # remove liked tracks from mirror, remove empty mirror
+                    remove_mirror = remove_empty_mirrors
+                    if len(new_sub_tags_list) > 0:
+                        remove_mirror = False
+                    mirror_tags_list, removed = clean_mirror(mirror_playlist_id, remove_mirror, confirm)
+                    all_liked_added_to_listened.extend(removed)
 
-            # remove tracks already exist in mirror
-            new_sub_tags_list, already_exist = utils.remove_exist_tags(mirror_tags_list, new_sub_tags_list,
-                                                                       ['SPOTIFY_TRACK_ID'])
+                # remove tracks already exist in mirror
+                new_sub_tags_list, already_exist = utils.remove_exist_tags(mirror_tags_list, new_sub_tags_list,
+                                                                           ['SPOTIFY_TRACK_ID'])
 
-        if len(new_sub_tags_list) > 0:
-            # create new mirror playlist
-            if mirror_playlist_id is None:
-                mirror_playlist_id = spotify_api.create_playlist(mirror_name)
-                click.echo(f'Mirror playlist "{mirror_name}" ({mirror_playlist_id}) created.')
+            if len(new_sub_tags_list) > 0:
+                # create new mirror playlist
+                if mirror_playlist_id is None:
+                    mirror_playlist_id = spotify_api.create_playlist(mirror_name)
+                    summery.append(f'Mirror playlist "{mirror_name}" ({mirror_playlist_id}) created.')
 
-            # add new tracks to mirror
-            new_tracks_ids = spotify_api.get_track_ids_from_tags_list(new_sub_tags_list)
-            tracks_added, import_duplicates, already_exist = \
-                spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
-            all_added_to_mirrors.extend(tracks_added)
-            if len(tracks_added) > 0:
-                write_mirrors_log(mirror_playlist_id, new_sub_tags_list)
-                click.echo(f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
+                # add new tracks to mirror
+                new_tracks_ids = spotify_api.get_track_ids_from_tags_list(new_sub_tags_list)
+                tracks_added, import_duplicates, already_exist = \
+                    spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
+                all_added_to_mirrors.extend(tracks_added)
+                if len(tracks_added) > 0:
+                    write_mirrors_log(mirror_playlist_id, new_sub_tags_list)
+                    summery.append(f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
+
+        bar.finish()
+
+    click.echo()
+    for line in summery:
+        click.echo(line)
 
     click.echo("------------------------------------------")
     click.echo(f'{len(all_sub_tracks)} tracks total in {len(subs)} subscribed playlists.')
