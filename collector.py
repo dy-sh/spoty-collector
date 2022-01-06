@@ -149,7 +149,7 @@ When executed, the following will happen:
 
 @collector.command("listened")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--like', '-l', is_flag=True,
+@click.option('--like', '-s', is_flag=True,
               help='Like all tracks in playlist.')
 @click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove listened playlists.')
@@ -181,7 +181,7 @@ When you run this command, the following will happen:
 
 @collector.command("ok")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--like', '-l', is_flag=True,
+@click.option('--like', '-s', is_flag=True,
               help='Like all tracks in playlist.')
 # @click.option('--find-copies', '-c', is_flag=True,
 #               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
@@ -208,27 +208,45 @@ Print the number of tracks listened to.
 
 @collector.command("clean")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--like', '-l', is_flag=True,
+@click.option('--no-empty-playlists', '-P', is_flag=True,
+              help='Do not remove empty playlists.')
+@click.option('--no-liked-tracks', '-S', is_flag=True,
+              help='Do not remove liked tracks.')
+@click.option('--no-duplicated-tracks', '-D', is_flag=True,
+              help='Do not remove duplicated tracks.')
+@click.option('--no-listened-tracks', '-L', is_flag=True,
+              help='Do not remove listened tracks.')
+@click.option('--like', '-s', is_flag=True,
               help='Like all listened tracks in playlist.')
 # @click.option('--find-copies', '-c', is_flag=True,
 #               help='For each listened track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
-@click.option('--do-not-remove', '-R', is_flag=True,
-              help='Do not remove empty playlists.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for delete playlist confirmation.')
-def clean_playlists(playlist_ids, like, do_not_remove, confirm):
+def clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks, no_listened_tracks, like,
+                    confirm):
     """
-Clean specified playlists. All already listened tracks will be removed from playlists.
+/b
+Clean specified playlists.
+When executed, the following will happen:
+- All already listened tracks will be removed from playlists.
+- All liked tracks will be removed from playlists.
+- All duplicates will be removed from playlists.
+- All empty playlists will be deleted.
+You can skip any of this step by options.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    tags_list, liked_tracks, deleted_playlists, removed_tracks \
-        = col.clean_playlists(playlist_ids, like, do_not_remove, confirm)
-    click.echo(f'{len(tags_list)} tracks total in specified playlists.')
-    if len(liked_tracks) > 0:
-        click.echo(f'{len(liked_tracks)} tracks liked.')
-    if len(deleted_playlists) > 0:
-        click.echo(f'{len(deleted_playlists)} playlists deleted from library.')
-    click.echo(f'{len(removed_tracks)} listened tracks removed from playlists.')
+    all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists \
+        = col.clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
+                              no_listened_tracks, like, confirm)
+    click.echo(f'{len(all_tags_list)} tracks total in specified playlists.')
+    if len(all_liked_tracks_removed) > 0:
+        click.echo(f'{len(all_liked_tracks_removed)} liked tracks removed.')
+    if len(all_duplicates_removed) > 0:
+        click.echo(f'{len(all_duplicates_removed)} duplicated tracks removed.')
+    if len(all_listened_removed) > 0:
+        click.echo(f'{len(all_listened_removed)} listened tracks removed.')
+    if len(all_deleted_playlists) > 0:
+        click.echo(f'{len(all_deleted_playlists)} empty playlists deleted.')
 
 
 @collector.command("clean-listened-file")
