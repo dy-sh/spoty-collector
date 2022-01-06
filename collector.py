@@ -53,7 +53,7 @@ Next, use "update" command to create mirrors and update it (see "update --help")
 @click.option('--remove-tracks', '-t', is_flag=True,
               help='Remove tracks in mirror playlists that exist in unsubscribed playlists.')
 @click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete mirror playlist confirmation.')
+              help='Do not ask for confirmation of deleting playlists and tracks.')
 def unsubscribe(playlist_ids, remove_mirror, remove_tracks, confirm):
     """
 Unsubscribe from the specified playlists (by playlist ID or URI).
@@ -71,7 +71,7 @@ PLAYLIST_IDS - IDs or URIs of subscribed playlists
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete mirror playlist confirmation.')
+              help='Do not ask for confirmation of deleting playlists.')
 def unsubscribe_all(remove_mirror, confirm):
     """
 Unsubscribe from all specified playlists.
@@ -87,7 +87,7 @@ Unsubscribe from all specified playlists.
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete mirror playlist confirmation.')
+              help='Do not ask for confirmation of deleting playlists.')
 def unsubscribe_mirror(mirror_playlist_ids, remove_mirror, confirm):
     """
 Unsubscribe from playlists for which the specified mirror playlists has been created.
@@ -105,7 +105,7 @@ MIRROR_PLAYLIST_IDS - IDs or URIs of mirror playlists.
 @click.option('--remove-mirror', '-r', is_flag=True,
               help='Remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete mirror playlist confirmation.')
+              help='Do not ask for confirmation of deleting playlists.')
 def unsubscribe_mirror_name(mirror_names, remove_mirror, confirm):
     """
 Unsubscribe from playlists for which the specified mirror has been created.
@@ -149,6 +149,15 @@ When executed, the following will happen:
     col.update(not do_not_remove, confirm, mirror_ids)
 
 
+@collector.command("listened-count")
+def listened_count():
+    """
+Print the number of tracks listened to.
+    """
+    tags_list = col.read_listened()
+    click.echo(f'{len(tags_list)} tracks listened.')
+
+
 @collector.command("listened")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--like', '-s', is_flag=True,
@@ -164,12 +173,12 @@ def listened(playlist_ids, like, do_not_remove, confirm):
 Mark playlist as listened to (by playlist ID or URI).
 It can be a mirror playlist or a regular playlist from your library or another user's playlist.
 When you run this command, the following will happen:
-- All tracks will be added to the list, which containing all the tracks you've listened to. This list is stored in a file in the plugin directory.
+- All tracks will be added to the list, which containing all the tracks you've listened to. This list is stored in a file (execute "config" command to find it).
 - If you added a --like flag, all tracks will be liked. Thus, when you see a like in any Spotify playlist, you will know that you have already heard this track.
 - If playlist exist in your library, it will be removed. You can cancel this step with a --do-not-remove flag.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    tags_list, liked_tracks, deleted_playlists, added_tags, already_listened_tags \
+    tags_list, liked_tracks, deleted_playlists, added_tracks, already_listened_tags \
         = col.listened(playlist_ids, like, do_not_remove, confirm)
     click.echo(f'{len(tags_list)} tracks total in specified playlists.')
     if len(liked_tracks) > 0:
@@ -178,7 +187,7 @@ When you run this command, the following will happen:
         click.echo(f'{len(deleted_playlists)} playlists deleted from library.')
     if len(already_listened_tags) > 0:
         click.echo(f'{len(already_listened_tags)} tracks already in listened list.')
-    click.echo(f'{len(added_tags)} tracks added to listened list.')
+    click.echo(f'{len(added_tracks)} tracks added to listened list.')
 
 
 @collector.command("ok")
@@ -199,13 +208,28 @@ Alias for "listened" command (to type shorter)
     ctx.invoke(listened, playlist_ids=playlist_ids, like=like, do_not_remove=do_not_remove, confirm=confirm)
 
 
-@collector.command("listened-count")
-def listened_count():
+@collector.command("del")
+@click.argument("playlist_ids", nargs=-1)
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete playlist confirmation.')
+def delete(playlist_ids, confirm):
     """
-Print the number of tracks listened to.
+Delete playlists (by playlist ID or URI).
+When you run this command, the following will happen:
+- All liked tracks will be marked as listened to.
+- Specified playlists will be deleted.
     """
-    tags_list = col.read_listened()
-    click.echo(f'{len(tags_list)} tracks listened.')
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+    tags_list, liked_tracks, deleted_playlists, added_tracks, already_listened_tracks \
+        = col.delete(playlist_ids, confirm)
+    if len(deleted_playlists) > 0:
+        click.echo(f'{len(deleted_playlists)} playlists deleted.')
+    click.echo(f'{len(tags_list)} tracks total in specified playlists has been deleted.')
+    if len(liked_tracks) > 0:
+        click.echo(f'{len(liked_tracks)} liked tracks.')
+    if len(already_listened_tracks) > 0:
+        click.echo(f'{len(already_listened_tracks)} tracks have already been in the list of listened tracks.')
+    click.echo(f'{len(added_tracks)} tracks added to the listened list.')
 
 
 @collector.command("clean")
@@ -223,7 +247,7 @@ Print the number of tracks listened to.
 # @click.option('--find-copies', '-c', is_flag=True,
 #               help='For each listened track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
 @click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete playlist confirmation.')
+              help='Do not ask any questions.')
 def clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks, no_listened_tracks, like,
                     confirm):
     """
@@ -252,7 +276,7 @@ You can skip any of this step by options.
         click.echo(f'{len(all_deleted_playlists)} empty playlists deleted.')
 
 
-@collector.command("clean-reg")
+@collector.command("clean-filtered")
 @click.argument("filter-names")
 @click.option('--no-empty-playlists', '-P', is_flag=True,
               help='Do not remove empty playlists.')
@@ -267,13 +291,13 @@ You can skip any of this step by options.
 # @click.option('--find-copies', '-c', is_flag=True,
 #               help='For each listened track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
 @click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete playlist confirmation.')
+              help='Do not ask any questions.')
 @click.pass_context
 def clean_playlists_by_regex(ctx, filter_names, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
                              no_listened_tracks, like,
                              confirm):
     """
-This command works the same way as "clean" command, but accepts not id playlists, but a regex which applies to playlist names.
+This command works the same way as "clean" command, but accepts a regex which applies to playlist names instead of playlist IDs.
 
 \b
 Examples:
@@ -310,12 +334,13 @@ Examples:
     for playlist in playlists:
         playlist_ids.append(playlist['id'])
 
-    ctx.invoke(clean_playlists, playlist_ids=playlist_ids, no_empty_playlists=no_empty_playlists, no_liked_tracks=no_liked_tracks,
+    ctx.invoke(clean_playlists, playlist_ids=playlist_ids, no_empty_playlists=no_empty_playlists,
+               no_liked_tracks=no_liked_tracks,
                no_duplicated_tracks=no_duplicated_tracks,
                no_listened_tracks=no_listened_tracks, like=like, confirm=confirm)
 
 
-@collector.command("clean-listened-file")
+@collector.command("clean-listened-list")
 def clean_listened():
     """
 Delete duplicates in listened list.
