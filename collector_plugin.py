@@ -85,14 +85,15 @@ def add_tracks_to_listened(tags_list: list, append=True):
     added = []
     already_listened = []
 
-    # remove already exist in listened
-    new_listened = []
-    for tags in tags_list:
-        if tags['SPOTIFY_TRACK_ID'] not in listened_ids:
-            new_listened.append(tags)
-        else:
-            already_listened.append(tags)
-    tags_list = new_listened
+    if append:
+        # remove already exist in listened
+        new_listened = []
+        for tags in tags_list:
+            if tags['SPOTIFY_TRACK_ID'] not in listened_ids:
+                new_listened.append(tags)
+            else:
+                already_listened.append(tags)
+        tags_list = new_listened
 
     # clean unnecessary tags
     new_tags_list = []
