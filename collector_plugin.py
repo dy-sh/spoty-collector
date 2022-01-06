@@ -110,7 +110,7 @@ def add_tracks_to_listened(tags_list: list, append=True):
 
 def clean_listened():
     tags_list = read_listened()
-    good, duplicates = utils.remove_duplicated_tags(tags_list, ['SPOTIFY_TRACK_ID'], False)
+    good, duplicates = utils.remove_duplicated_tags(tags_list, ['ISRC', "SPOTY_LENGTH"], False, True)
     if len(duplicates) > 0:
         add_tracks_to_listened(good, False)
     return good, duplicates
@@ -165,7 +165,8 @@ def subscribe(playlist_ids: list, mirror_name=None):
     return all_sub_playlist_ids, all_mirrors_name
 
 
-def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, remove_tracks_from_mirror=False, confirm=False, user_playlists:list=None):
+def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, remove_tracks_from_mirror=False, confirm=False,
+                user_playlists: list = None):
     mirrors = read_mirrors()
     unsubscribed = []
     removed_playlists = []
