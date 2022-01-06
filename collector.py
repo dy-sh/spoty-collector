@@ -240,6 +240,7 @@ You can skip any of this step by options.
     all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists \
         = col.clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
                               no_listened_tracks, like, confirm)
+    click.echo('--------------------------------------')
     click.echo(f'{len(all_tags_list)} tracks total in specified playlists.')
     if len(all_liked_tracks_removed) > 0:
         click.echo(f'{len(all_liked_tracks_removed)} liked tracks removed.')
