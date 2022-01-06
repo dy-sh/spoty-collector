@@ -226,7 +226,7 @@ When you run this command, the following will happen:
         click.echo(f'{len(deleted_playlists)} playlists deleted.')
     click.echo(f'{len(tags_list)} tracks total in specified playlists has been deleted.')
     if len(liked_tracks) > 0:
-        click.echo(f'{len(liked_tracks)} liked tracks.')
+        click.echo(f'{len(liked_tracks)} liked tracks in the playlists found.')
     if len(already_listened_tracks) > 0:
         click.echo(f'{len(already_listened_tracks)} tracks have already been in the list of listened tracks.')
     click.echo(f'{len(added_tracks)} tracks added to the listened list.')

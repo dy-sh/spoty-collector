@@ -82,7 +82,6 @@ def add_tracks_to_listened(tags_list: list, append=True):
     listened = read_listened()
     listened_ids = spotify_api.get_track_ids_from_tags_list(listened)
 
-    added = []
     already_listened = []
 
     if append:
@@ -106,7 +105,7 @@ def add_tracks_to_listened(tags_list: list, append=True):
 
     csv_playlist.write_tags_to_csv(new_tags_list, listened_file_name, append)
 
-    return added, already_listened
+    return new_tags_list, already_listened
 
 
 def clean_listened():
@@ -548,9 +547,8 @@ def delete(playlist_ids, confirm):
         tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
         all_tags_list.extend(tags_list)
 
-        ids = spotify_api.get_track_ids(tracks)
-        liked_track_ids = spotify_api.get_liked_track_ids(ids)
-        all_liked_tracks.extend(liked_track_ids)
+        liked_tags_list, not_liked_tags_list = spotify_api.get_liked_tags_list(tags_list)
+        all_liked_tracks.extend(liked_tags_list)
 
         res = spotify_api.delete_playlist(playlist_id, confirm)
         if res:
