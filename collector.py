@@ -234,14 +234,14 @@ When you run this command, the following will happen:
 
 @collector.command("clean")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--no-empty-playlists', '-P', is_flag=True,
-              help='Do not remove empty playlists.')
-@click.option('--no-liked-tracks', '-S', is_flag=True,
-              help='Do not remove liked tracks.')
-@click.option('--no-duplicated-tracks', '-D', is_flag=True,
-              help='Do not remove duplicated tracks.')
 @click.option('--no-listened-tracks', '-L', is_flag=True,
               help='Do not remove listened tracks.')
+@click.option('--no-duplicated-tracks', '-D', is_flag=True,
+              help='Do not remove duplicated tracks.')
+@click.option('--no-liked-tracks', '-S', is_flag=True,
+              help='Do not remove liked tracks (and do not add them to the listened list).')
+@click.option('--no-empty-playlists', '-P', is_flag=True,
+              help='Do not remove empty playlists.')
 @click.option('--like', '-s', is_flag=True,
               help='Like all listened tracks in playlist.')
 # @click.option('--find-copies', '-c', is_flag=True,
@@ -255,15 +255,16 @@ def clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplic
 Clean specified playlists.
 When executed, the following will happen:
 - All already listened tracks will be removed from playlists.
-- All liked tracks will be removed from playlists.
 - All duplicates will be removed from playlists.
+- All liked tracks will be added to the listened list and removed from playlists.
 - All empty playlists will be deleted.
 You can skip any of this step by options.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists \
-        = col.clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
-                              no_listened_tracks, like, confirm)
+
+    all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists, \
+    all_added_to_listened = col.clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
+                                                no_listened_tracks, like, confirm)
     click.echo('--------------------------------------')
     click.echo(f'{len(all_tags_list)} tracks total in specified playlists.')
     if len(all_liked_tracks_removed) > 0:
@@ -272,8 +273,19 @@ You can skip any of this step by options.
         click.echo(f'{len(all_duplicates_removed)} duplicated tracks removed.')
     if len(all_listened_removed) > 0:
         click.echo(f'{len(all_listened_removed)} listened tracks removed.')
+    if len(all_added_to_listened) > 0:
+        click.echo(f'{len(all_added_to_listened)} liked tracks added to listened.')
     if len(all_deleted_playlists) > 0:
         click.echo(f'{len(all_deleted_playlists)} empty playlists deleted.')
+
+    if len(all_liked_tracks_removed) ==0 \
+        and len(all_duplicates_removed)==0 \
+        and len(all_listened_removed) ==0\
+        and len(all_added_to_listened) ==0\
+        and len(all_deleted_playlists) ==0:
+            click.echo(f'The playlists are fine. No changes applied.')
+
+
 
 
 @collector.command("clean-filtered")
