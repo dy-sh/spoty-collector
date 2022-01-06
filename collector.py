@@ -1,7 +1,9 @@
 import plugins.collector.collector_plugin as col
 import spoty.utils
+from spoty import spotify_api
 from spoty.commands.spotify_like_commands import like_import
 import click
+import re
 
 
 @click.group("collector")
@@ -225,7 +227,7 @@ Print the number of tracks listened to.
 def clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks, no_listened_tracks, like,
                     confirm):
     """
-/b
+\b
 Clean specified playlists.
 When executed, the following will happen:
 - All already listened tracks will be removed from playlists.
@@ -247,6 +249,69 @@ You can skip any of this step by options.
         click.echo(f'{len(all_listened_removed)} listened tracks removed.')
     if len(all_deleted_playlists) > 0:
         click.echo(f'{len(all_deleted_playlists)} empty playlists deleted.')
+
+
+@collector.command("clean-reg")
+@click.argument("filter-names")
+@click.option('--no-empty-playlists', '-P', is_flag=True,
+              help='Do not remove empty playlists.')
+@click.option('--no-liked-tracks', '-S', is_flag=True,
+              help='Do not remove liked tracks.')
+@click.option('--no-duplicated-tracks', '-D', is_flag=True,
+              help='Do not remove duplicated tracks.')
+@click.option('--no-listened-tracks', '-L', is_flag=True,
+              help='Do not remove listened tracks.')
+@click.option('--like', '-s', is_flag=True,
+              help='Like all listened tracks in playlist.')
+# @click.option('--find-copies', '-c', is_flag=True,
+#               help='For each listened track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete playlist confirmation.')
+@click.pass_context
+def clean_playlists_by_regex(ctx, filter_names, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
+                             no_listened_tracks, like,
+                             confirm):
+    """
+This command works the same way as "clean" command, but accepts not id playlists, but a regex which applies to playlist names.
+
+\b
+Examples:
+    Clean all playlists, whose names start with "BEST":
+    spoty plug collector clean-reg "^BEST"
+
+    Clean all playlists, whose names contain "rock":
+    spoty plug collector clean-reg "rock"
+
+    Clean all playlists, whose names contain "rock", "Rock", "ROCK" (ignore case sensitivity):
+    spoty plug collector clean-reg "(?i)rock"
+    """
+
+    playlists = spotify_api.get_list_of_playlists()
+
+    if len(playlists) == 0:
+        exit()
+
+    if filter_names is not None:
+        playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), playlists))
+        click.echo(f'{len(playlists)} playlists matches the filter')
+
+    if len(playlists) == 0:
+        exit()
+
+    click.echo("Found playlists: ")
+    for playlist in playlists:
+        click.echo(f'  {playlist["id"]} "{playlist["name"]}"')
+
+    if not confirm:
+        click.confirm(f'Are you sure you want to clean {len(playlists)} playlists?', abort=True)
+
+    playlist_ids = []
+    for playlist in playlists:
+        playlist_ids.append(playlist['id'])
+
+    ctx.invoke(clean_playlists, playlist_ids=playlist_ids, no_empty_playlists=no_empty_playlists, no_liked_tracks=no_liked_tracks,
+               no_duplicated_tracks=no_duplicated_tracks,
+               no_listened_tracks=no_listened_tracks, like=like, confirm=confirm)
 
 
 @collector.command("clean-listened-file")
