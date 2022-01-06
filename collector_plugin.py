@@ -464,12 +464,20 @@ def clean_playlists(playlist_ids, like_listened_tracks, do_not_remove, confirm):
         tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
         all_tags_list.extend(tags_list)
 
+        # remove listened tracks
+
+
+        # like listened tracks
         if like_listened_tracks:
             ids = spotify_api.get_track_ids(tracks)
             not_liked_track_ids = spotify_api.get_not_liked_track_ids(ids)
             all_liked_tracks.extend(not_liked_track_ids)
             spotify_api.add_tracks_to_liked(not_liked_track_ids)
 
+
+
+
+        # remove playlist if empty
         if not do_not_remove:
             res = spotify_api.delete_playlist(playlist_id, confirm)
             if res:
@@ -478,3 +486,5 @@ def clean_playlists(playlist_ids, like_listened_tracks, do_not_remove, confirm):
     added_tags, already_listened_tags = add_tracks_to_listened(all_tags_list, True)
 
     return tags_list, liked_tracks, deleted_playlists, removed_tracks
+
+

@@ -1,5 +1,6 @@
 import plugins.collector.collector_plugin as col
 import spoty.utils
+from spoty.commands.spotify_like_commands import like_import
 import click
 
 
@@ -241,3 +242,21 @@ Delete duplicates in listened list.
         click.echo(f'{len(duplicates)} duplicated tracks removed (listened tracks remain: {len(good)}).')
     else:
         click.echo(f'No duplicated tracks found (total listened tracks: {total_count}).')
+
+
+@collector.command("like-all-listened")
+@click.pass_context
+def like_all_listened(ctx):
+    """
+Like all listened tracks.
+    """
+    ctx.invoke(like_import, file_names=[col.listened_file_name])
+
+
+@collector.command("unlike-all-listened")
+@click.pass_context
+def unlike_all_listened(ctx):
+    """
+Unlike all listened tracks.
+    """
+    ctx.invoke(like_import, file_names=[col.listened_file_name], unlike=True)
