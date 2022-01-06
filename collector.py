@@ -23,6 +23,7 @@ Prints configuration parameters.
     click.echo(f'--------- SETTINGS: ----------')
     click.echo(f'LISTENED_FILE_NAME: {col.listened_file_name}')
     click.echo(f'MIRRORS_FILE_NAME: {col.mirrors_file_name}')
+    click.echo(f'MIRRORS_LOG_FILE_NAME: {col.mirrors_log_file_name}')
 
 
 @collector.command("sub")
@@ -278,14 +279,12 @@ You can skip any of this step by options.
     if len(all_deleted_playlists) > 0:
         click.echo(f'{len(all_deleted_playlists)} empty playlists deleted.')
 
-    if len(all_liked_tracks_removed) ==0 \
-        and len(all_duplicates_removed)==0 \
-        and len(all_listened_removed) ==0\
-        and len(all_added_to_listened) ==0\
-        and len(all_deleted_playlists) ==0:
-            click.echo(f'The playlists are fine. No changes applied.')
-
-
+    if len(all_liked_tracks_removed) == 0 \
+            and len(all_duplicates_removed) == 0 \
+            and len(all_listened_removed) == 0 \
+            and len(all_added_to_listened) == 0 \
+            and len(all_deleted_playlists) == 0:
+        click.echo(f'The playlists are fine. No changes applied.')
 
 
 @collector.command("clean-filtered")
@@ -389,3 +388,21 @@ def sort_mirrors():
 Sort mirrors in the mirrors file.
     """
     col.sort_mirrors()
+
+
+@collector.command("find-in-mirrors-log")
+@click.argument("track_id")
+def find_in_mirrors_log(track_id):
+    """
+Specify the track ID and find out to which mirrors it was added from which subscribed playlists.
+    """
+    track_id = spotify_api.parse_track_id(track_id)
+
+    records = col.find_in_mirrors_log(track_id)
+    if len(records) == 0:
+        click.echo(f'Track {track_id} not found in the log.')
+        exit()
+
+    click.echo(f'Track {track_id} was added (subscribed playlist id : mirror playlist id):')
+    for rec in records:
+        click.echo(f'{rec[2]} : {rec[0]}')

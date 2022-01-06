@@ -19,6 +19,7 @@ settings = Dynaconf(
 
 listened_file_name = settings.COLLECTOR.LISTENED_FILE_NAME
 mirrors_file_name = settings.COLLECTOR.MIRRORS_FILE_NAME
+mirrors_log_file_name = settings.COLLECTOR.MIRRORS_LOG_FILE_NAME
 
 if listened_file_name.startswith("./") or listened_file_name.startswith(".\\"):
     listened_file_name = os.path.join(current_directory, listened_file_name)
@@ -26,8 +27,12 @@ if listened_file_name.startswith("./") or listened_file_name.startswith(".\\"):
 if mirrors_file_name.startswith("./") or mirrors_file_name.startswith(".\\"):
     mirrors_file_name = os.path.join(current_directory, mirrors_file_name)
 
+if mirrors_log_file_name.startswith("./") or mirrors_log_file_name.startswith(".\\"):
+    mirrors_log_file_name = os.path.join(current_directory, mirrors_log_file_name)
+
 listened_file_name = os.path.abspath(listened_file_name)
 mirrors_file_name = os.path.abspath(mirrors_file_name)
+mirrors_log_file_name = os.path.abspath(mirrors_log_file_name)
 
 LISTENED_LIST_TAGS = [
     'SPOTY_LENGTH',
@@ -50,8 +55,8 @@ def read_mirrors():
             line = line.rstrip("\n").strip()
             if line == "":
                 continue
-            playlist_id = line.split(':')[0]
-            mirror = line.split(':', 1)[1]
+            playlist_id = line.split(',')[0]
+            mirror = line.split(',', 1)[1]
             if mirror not in mirrors:
                 mirrors[mirror] = []
             mirrors[mirror].append(playlist_id)
@@ -62,7 +67,7 @@ def write_mirrors(mirrors: dict):
     with open(mirrors_file_name, 'w', encoding='utf-8-sig') as file:
         for mirror_name, playlist_ids in mirrors.items():
             for playlist_id in playlist_ids:
-                file.write(f'{playlist_id}:{mirror_name}\n')
+                file.write(f'{playlist_id},{mirror_name}\n')
 
 
 def get_subscriptions(mirrors: dict):
@@ -375,8 +380,8 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None):
                 spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
             all_added_to_mirrors.extend(tracks_added)
             if len(tracks_added) > 0:
-                click.echo(
-                    f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
+                write_mirrors_log(mirror_playlist_id, new_sub_tags_list)
+                click.echo(f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
 
     click.echo("------------------------------------------")
     click.echo(f'{len(all_sub_tracks)} tracks total in {len(subs)} subscribed playlists.')
@@ -568,3 +573,37 @@ def sort_mirrors():
     mirrors = read_mirrors()
     mirrors = dict(sorted(mirrors.items()))
     write_mirrors(mirrors)
+
+
+def write_mirrors_log(mirror_playlist_id, tags_list):
+    with open(mirrors_log_file_name, 'a', encoding='utf-8-sig') as file:
+        for tags in tags_list:
+            file.write(f'{mirror_playlist_id},{tags["SPOTIFY_TRACK_ID"]},{tags["SPOTY_PLAYLIST_ID"]}\n')
+
+
+def read_mirrors_log():
+    if not os.path.isfile(mirrors_log_file_name):
+        return {}
+    with open(mirrors_log_file_name, 'r', encoding='utf-8-sig') as file:
+        log = []
+        lines = file.readlines()
+        for line in lines:
+            line = line.rstrip("\n").strip()
+            if line == "":
+                continue
+            mirror_playlist_id = line.split(',')[0]
+            track_id = line.split(',')[1]
+            sub_playlist_id = line.split(',')[2]
+            rec = [mirror_playlist_id, track_id, sub_playlist_id]
+            log.append(rec)
+
+        return log
+
+
+def find_in_mirrors_log(track_id):
+    records = []
+    log = read_mirrors_log()
+    for rec in log:
+        if rec[1] == track_id:
+            records.append(rec)
+    return records
