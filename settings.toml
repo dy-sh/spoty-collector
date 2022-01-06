@@ -1,0 +1,3 @@
+[COLLECTOR]
+LISTENED_FILE_NAME = "./listened.csv"
+MIRRORS_FILE_NAME = "./mirrors.txt"

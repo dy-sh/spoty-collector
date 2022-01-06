@@ -11,6 +11,15 @@ Plugin for collecting music in spotify.
     pass
 
 
+@collector.command("config")
+def config():
+    """
+Prints configuration parameters.
+    """
+click.echo(f'LISTENED_FILE_NAME: {col.listened_file_name}')
+click.echo(f'MIRRORS_FILE_NAME: {col.mirrors_file_name}')
+
+
 @collector.command("sub")
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--mirror-name', '--n',

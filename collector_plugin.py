@@ -4,11 +4,30 @@ from spoty import plugins_path
 from spoty import spotify_api
 from spoty import csv_playlist
 from spoty import utils
+from dynaconf import Dynaconf
 import os.path
 import click
 
-mirrors_file_name = os.path.abspath(os.path.join(plugins_path, 'collector', 'mirrors.txt'))
-listened_file_name = os.path.abspath(os.path.join(plugins_path, 'collector', 'listened.csv'))
+current_directory = os.path.dirname(os.path.realpath(__file__))
+# config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
+settings_file_name = os.path.join(current_directory, 'settings.toml')
+
+settings = Dynaconf(
+    envvar_prefix="COLLECTOR",
+    settings_files=[settings_file_name],
+)
+
+listened_file_name = settings.COLLECTOR.LISTENED_FILE_NAME
+mirrors_file_name = settings.COLLECTOR.MIRRORS_FILE_NAME
+
+if listened_file_name.startswith("./") or listened_file_name.startswith(".\\"):
+    listened_file_name = os.path.join(current_directory, listened_file_name)
+
+if mirrors_file_name.startswith("./") or mirrors_file_name.startswith(".\\"):
+    mirrors_file_name = os.path.join(current_directory, mirrors_file_name)
+
+listened_file_name = os.path.abspath(listened_file_name)
+mirrors_file_name = os.path.abspath(mirrors_file_name)
 
 LISTENED_LIST_TAGS = [
     'SPOTY_LENGTH',
@@ -23,8 +42,7 @@ LISTENED_LIST_TAGS = [
 
 def read_mirrors():
     if not os.path.isfile(mirrors_file_name):
-        with open(mirrors_file_name, 'w') as fp:
-            pass
+        return {}
     with open(mirrors_file_name, 'r') as file:
         mirrors = {}
         lines = file.readlines()
