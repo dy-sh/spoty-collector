@@ -16,8 +16,10 @@ def config():
     """
 Prints configuration parameters.
     """
-click.echo(f'LISTENED_FILE_NAME: {col.listened_file_name}')
-click.echo(f'MIRRORS_FILE_NAME: {col.mirrors_file_name}')
+    click.echo(f'Settings file name: {col.settings_file_name}')
+    click.echo(f'--------- SETTINGS: ----------')
+    click.echo(f'LISTENED_FILE_NAME: {col.listened_file_name}')
+    click.echo(f'MIRRORS_FILE_NAME: {col.mirrors_file_name}')
 
 
 @collector.command("sub")
