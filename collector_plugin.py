@@ -130,8 +130,7 @@ def get_not_listened_tracks(new_tags_list: list, show_progressbar=False):
     # new_tags_list, listened = utils.remove_exist_tags(all_listened, new_tags_list, ['SPOTIFY_TRACK_ID'], False)
     # listened_tags_list.extend(listened)
 
-    new_tags_list, listened = utils.remove_exist_tags(all_listened, new_tags_list, ['ISRC', 'SPOTY_LENGTH'], False,
-                                                      show_progressbar)
+    new_tags_list, listened = utils.remove_exist_tags_by_isrc_and_length(all_listened, new_tags_list, show_progressbar)
     listened_tags_list.extend(listened)
 
     return new_tags_list, listened_tags_list
@@ -324,7 +323,8 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None):
 
     summery = []
 
-    with click.progressbar(length=len(subs)+1, label=f'Updating {len(mirrors)} mirrors for {len(subs)} subscribed playlists') as bar:
+    with click.progressbar(length=len(subs) + 1,
+                           label=f'Updating {len(mirrors)} mirrors for {len(subs)} subscribed playlists') as bar:
         for mirror_name, sub_playlists_ids in mirrors.items():
             # get mirror playlist
             mirror_playlist_id = None
@@ -381,12 +381,13 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None):
 
                 # add new tracks to mirror
                 new_tracks_ids = spotify_api.get_track_ids_from_tags_list(new_sub_tags_list)
-                tracks_added, import_duplicates, already_exist = \
+                tracks_added, import_duplicates, already_exist, invalid_ids = \
                     spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
                 all_added_to_mirrors.extend(tracks_added)
                 if len(tracks_added) > 0:
                     write_mirrors_log(mirror_playlist_id, new_sub_tags_list)
-                    summery.append(f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
+                    summery.append(
+                        f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
 
         bar.finish()
 
