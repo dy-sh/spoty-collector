@@ -1,4 +1,4 @@
-import plugins.collector.collector_plugin as col
+import spoty.plugins.collector.collector_plugin as col
 import spoty.utils
 from spoty import spotify_api
 from spoty.commands.spotify_like_commands import like_import
