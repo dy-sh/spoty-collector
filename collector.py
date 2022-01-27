@@ -391,7 +391,11 @@ Sort mirrors in the mirrors file.
 
 
 @collector.command("reduce")
-def reduce_mirrors():
+@click.option('--dont-unsubscribe', '-U', is_flag=True,
+              help='Do not unsubscribe (list only).')
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask any questions.')
+def reduce_mirrors(dont_unsubscribe, confirm):
     """
 Remove playlists from subscriptions that contain few good tracks.
 
@@ -406,7 +410,8 @@ When you run this function, all mirrors will be checked for how many tracks you 
 Next, you will be asked to unsubscribe from playlists that you have listened to but have added too few tracks to your favorites.
 This will allow you to subscribe to only those playlists that contain enough good (in your opinion) tracks.
     """
-    subs, all_not_listened_subs, subs_by_fav_percentage = col.reduce_mirrors()
+    subs, all_not_listened_subs, subs_by_fav_percentage, all_unsubscribed, all_ignored \
+        = col.reduce_mirrors(True, not dont_unsubscribe, confirm)
 
     click.echo("------------------------------------------")
     click.echo("Subscriptions by favorite percentage:")
@@ -414,13 +419,17 @@ This will allow you to subscribe to only those playlists that contain enough goo
 
     fav_subs = sorted(subs_by_fav_percentage, key=lambda x: x['fav_percentage'])
     for s in fav_subs:
-        click.echo(f'{s["fav_percentage"]:.1f} : {s["listened_count"]}/{s["tracks_count"]} : {s["playlist"]["id"]} : {s["playlist"]["name"]}')
+        click.echo(
+            f'{s["fav_percentage"]:.1f} : {s["listened_count"]}/{s["tracks_count"]} : {s["playlist"]["id"]} : {s["playlist"]["name"]}')
 
     click.echo("------------------------------------------")
     click.echo(f'{len(subs)} subscribed playlists total.')
+    if len(all_ignored) > 0:
+        click.echo(f'{len(all_ignored)} playlists skipped due to ignore settings.')
     if len(all_not_listened_subs) > 0:
-        click.echo(f'{len(all_not_listened_subs)} playlists skipped (too few tracks listened).')
-
+        click.echo(f'{len(all_not_listened_subs)} playlists skipped due to too few tracks listened.')
+    if len(all_unsubscribed) > 0:
+        click.echo(f'{len(all_unsubscribed)} playlists unsubscribed.')
 
 
 @collector.command("find-in-mirrors-log")

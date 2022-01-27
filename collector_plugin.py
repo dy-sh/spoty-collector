@@ -48,6 +48,7 @@ LISTENED_LIST_TAGS = [
 PLAYLISTS_WITH_FAVORITES = settings.COLLECTOR.PLAYLISTS_WITH_FAVORITES
 REDUCE_PERCENTAGE_OF_GOOD_TRACKS = settings.COLLECTOR.REDUCE_PERCENTAGE_OF_GOOD_TRACKS
 REDUCE_MINIMUM_LISTENED_TRACKS = settings.COLLECTOR.REDUCE_MINIMUM_LISTENED_TRACKS
+REDUCE_IGNORE_PLAYLISTS = settings.COLLECTOR.REDUCE_IGNORE_PLAYLISTS
 
 
 def read_mirrors():
@@ -626,19 +627,28 @@ def find_in_mirrors_log(track_id):
     return records
 
 
-def reduce_mirrors(unsub=True, confirm=False):
+def reduce_mirrors(read_log=True, unsub=True, confirm=False):
     mirrors = read_mirrors()
     if len(mirrors.items()) == 0:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
         exit()
 
+    subs = get_subscriptions(mirrors)
+
     listened = read_listened()
-    listened_dct = dict((track['SPOTIFY_TRACK_ID'], track) for track in listened)
+    # listened_dct = dict((track['SPOTIFY_TRACK_ID'], track) for track in listened)
     if len(listened) == 0:
         click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
         exit()
 
-    subs = get_subscriptions(mirrors)
+    log_dict = {}  # {sub_playlist_id: [track_id, track_id, track_id]}
+    if read_log:
+        log = read_mirrors_log()
+        for l in log:
+            sub_playlist_id = l[2]
+            if sub_playlist_id not in log_dict:
+                log_dict[sub_playlist_id] = []
+            log_dict[sub_playlist_id].append(l[1])
 
     user_playlists = spotify_api.get_list_of_playlists()
 
@@ -663,9 +673,15 @@ def reduce_mirrors(unsub=True, confirm=False):
 
     all_not_listened_subs = []
     subs_by_fav_percentage = []
+    all_unsubscribed = []
+    all_ignored = []
 
     with click.progressbar(subs, label=f'Reducing {len(mirrors)} mirrors ({len(subs)} subscribed playlists)') as bar:
         for sub_id in bar:
+            if sub_id in REDUCE_IGNORE_PLAYLISTS:
+                all_ignored.append(sub_id)
+                continue
+
             # get all tracks from subscribed playlists
             sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_id)
             sub_tracks = sub_playlist["tracks"]["items"]
@@ -701,8 +717,10 @@ def reduce_mirrors(unsub=True, confirm=False):
 
             if unsub:
                 if fav_percentage < REDUCE_PERCENTAGE_OF_GOOD_TRACKS:
-                    click.echo(f'Playlist "{sub_playlist["name"]}" ({sub_playlist["id"]}) has only {len(tracks_exist_in_fav)} favourite from {len(listened_or_liked)} listened tracks (total tracks: {len(sub_tags_list)}).')
+                    click.echo(
+                        f'\n"{sub_playlist["name"]}" ({sub_playlist["id"]}) playlist has only {len(tracks_exist_in_fav)} favourite from {len(listened_or_liked)} listened tracks (total tracks: {len(sub_tags_list)}).')
                     if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
                         unsubscribe([sub_playlist['id']], False, True, False, user_playlists)
+                        all_unsubscribed.append(sub_playlist['id'])
 
-    return subs, all_not_listened_subs, subs_by_fav_percentage
+    return subs, all_not_listened_subs, subs_by_fav_percentage, all_unsubscribed, all_ignored
