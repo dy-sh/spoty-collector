@@ -126,7 +126,7 @@ def list_mirrors(fast):
     """
 Display a list of mirrors and subscribed playlists.
     """
-    col.list(fast)
+    col.list_playlists(fast)
 
 
 @collector.command("update")
@@ -388,6 +388,39 @@ def sort_mirrors():
 Sort mirrors in the mirrors file.
     """
     col.sort_mirrors()
+
+
+@collector.command("reduce")
+def reduce_mirrors():
+    """
+Remove playlists from subscriptions that contain few good tracks.
+
+\b
+For this feature to work, you need to tweak the config file.
+In the config, you need to specify which playlists contain your favorite tracks.
+You can specify a pattern of playlist names in regex format.
+
+\b
+The idea of this feature is that you will add all the tracks you like from mirrors to your playlists.
+When you run this function, all mirrors will be checked for how many tracks you have added to your playlists from those that you have listened to.
+Next, you will be asked to unsubscribe from playlists that you have listened to but have added too few tracks to your favorites.
+This will allow you to subscribe to only those playlists that contain enough good (in your opinion) tracks.
+    """
+    subs, all_not_listened_subs, subs_by_fav_percentage = col.reduce_mirrors()
+
+    click.echo("------------------------------------------")
+    click.echo("Subscriptions by favorite percentage:")
+    click.echo("FAV.PERCENTAGE : LISTENED_COUNT/TRACKS_COUNT : PLAYLIST_ID : PLAYLIST_NAME")
+
+    fav_subs = sorted(subs_by_fav_percentage, key=lambda x: x['fav_percentage'])
+    for s in fav_subs:
+        click.echo(f'{s["fav_percentage"]:.1f} : {s["listened_count"]}/{s["tracks_count"]} : {s["playlist"]["id"]} : {s["playlist"]["name"]}')
+
+    click.echo("------------------------------------------")
+    click.echo(f'{len(subs)} subscribed playlists total.')
+    if len(all_not_listened_subs) > 0:
+        click.echo(f'{len(all_not_listened_subs)} playlists skipped (too few tracks listened).')
+
 
 
 @collector.command("find-in-mirrors-log")

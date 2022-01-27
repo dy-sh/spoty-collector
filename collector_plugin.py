@@ -7,6 +7,7 @@ from spoty import utils
 from dynaconf import Dynaconf
 import os.path
 import click
+import re
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -43,6 +44,10 @@ LISTENED_LIST_TAGS = [
     'ALBUM',
     'YEAR',
 ]
+
+PLAYLISTS_WITH_FAVORITES = settings.COLLECTOR.PLAYLISTS_WITH_FAVORITES
+REDUCE_PERCENTAGE_OF_GOOD_TRACKS = settings.COLLECTOR.REDUCE_PERCENTAGE_OF_GOOD_TRACKS
+REDUCE_MINIMUM_LISTENED_TRACKS = settings.COLLECTOR.REDUCE_MINIMUM_LISTENED_TRACKS
 
 
 def read_mirrors():
@@ -281,7 +286,7 @@ def unsubscribe_mirrors_by_name(mirror_names, remove_mirrors, confirm):
     return all_unsubscribed
 
 
-def list(fast=True):
+def list_playlists(fast=True):
     mirrors = read_mirrors()
     all_playlists = get_subscriptions(mirrors)
     for mirror, playlist_ids in mirrors.items():
@@ -619,3 +624,85 @@ def find_in_mirrors_log(track_id):
         if rec[1] == track_id:
             records.append(rec)
     return records
+
+
+def reduce_mirrors(unsub=True, confirm=False):
+    mirrors = read_mirrors()
+    if len(mirrors.items()) == 0:
+        click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
+        exit()
+
+    listened = read_listened()
+    listened_dct = dict((track['SPOTIFY_TRACK_ID'], track) for track in listened)
+    if len(listened) == 0:
+        click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
+        exit()
+
+    subs = get_subscriptions(mirrors)
+
+    user_playlists = spotify_api.get_list_of_playlists()
+
+    if len(PLAYLISTS_WITH_FAVORITES) < 1:
+        click.echo('No favorites playlists specified. Edit "PLAYLISTS_WITH_FAVORITES" field in settings.toml file '
+                   'located in the collector plugin folder.')
+        exit()
+
+    fav_playlists = set()
+    for rule in PLAYLISTS_WITH_FAVORITES:
+        for playlist in user_playlists:
+            if re.findall(rule, playlist['name']):
+                fav_playlists.add(playlist['id'])
+
+    fav_tracks, fav_tags, fav_playlists = spotify_api.get_tracks_from_playlists(list(fav_playlists))
+    fav_tracks_dict = {}  # ISRC: [LENGTH,LENGTH,LENGTH]
+    for tags in fav_tags:
+        isrc = tags['ISRC']
+        if isrc not in fav_tracks_dict:
+            fav_tracks_dict[isrc] = []
+        fav_tracks_dict[isrc].append(tags['SPOTY_LENGTH'])
+
+    all_not_listened_subs = []
+    subs_by_fav_percentage = []
+
+    with click.progressbar(subs, label=f'Reducing {len(mirrors)} mirrors ({len(subs)} subscribed playlists)') as bar:
+        for sub_id in bar:
+            # get all tracks from subscribed playlists
+            sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_id)
+            sub_tracks = sub_playlist["tracks"]["items"]
+            sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+
+            # get listened tracks
+            not_listened, listened = get_not_listened_tracks(sub_tags_list)
+
+            # get liked tracks
+            liked, not_liked = spotify_api.get_liked_tags_list(not_listened)
+
+            listened_or_liked = listened
+            listened_or_liked.extend(liked)
+
+            if len(listened_or_liked) < REDUCE_MINIMUM_LISTENED_TRACKS:
+                all_not_listened_subs.append(sub_playlist)
+                continue
+
+            tracks_exist_in_fav = []
+            for track in listened_or_liked:
+                if track['ISRC'] in fav_tracks_dict:
+                    for length in fav_tracks_dict[track['ISRC']]:
+                        if length == track['SPOTY_LENGTH']:
+                            tracks_exist_in_fav.append(track)
+
+            fav_percentage = len(tracks_exist_in_fav) / len(listened) * 100
+            subs_by_fav_percentage.append({
+                'fav_percentage': fav_percentage,
+                'playlist': sub_playlist,
+                'listened_count': len(listened_or_liked),
+                'tracks_count': len(sub_tags_list)
+            })
+
+            if unsub:
+                if fav_percentage < REDUCE_PERCENTAGE_OF_GOOD_TRACKS:
+                    click.echo(f'Playlist "{sub_playlist["name"]}" ({sub_playlist["id"]}) has only {len(tracks_exist_in_fav)} favourite from {len(listened_or_liked)} listened tracks (total tracks: {len(sub_tags_list)}).')
+                    if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
+                        unsubscribe([sub_playlist['id']], False, True, False, user_playlists)
+
+    return subs, all_not_listened_subs, subs_by_fav_percentage
