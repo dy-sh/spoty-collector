@@ -477,7 +477,7 @@ PLAYLIST_ID - ID or URI of playlist.
     click.echo(f'Playlist: "{info.playlist["name"]}" ({info.playlist["id"]})')
     click.echo(f'Tracks total: {len(info.tracks)}')
     click.echo(f'Tracks listened: {len(info.listened_tracks)}')
-    click.echo(f'Favourite tracks: {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
+    click.echo(f'Favorite tracks: {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
     if days < 10000:
         click.echo(f'Last update: {info.last_update} ({days} days ago)')
     else:
@@ -553,14 +553,16 @@ Print info all mirrors.
 
 def print_mirror_info(info: SubscriptionInfo):
     days = (datetime.today() - info.last_update).days
-    click.echo("------------------------------------------")
-    click.echo(f'Playlist: "{info.playlist["name"]}" ({info.playlist["id"]})')
-    click.echo(f'Tracks total: {len(info.tracks)}')
-    click.echo(f'Tracks listened: {len(info.listened_tracks)}')
-    click.echo(f'Favourite tracks: {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
+    click.echo("\n=====================================================================\n")
+    click.echo(f'Mirror          : "{info.mirror_name}"')
+    click.echo(f'Playlist        : "{info.playlist["name"]}" ({info.playlist["id"]})')
     if days < 10000:
-        click.echo(f'Last update: {info.last_update} ({days} days ago)')
+        click.echo(f'Last update     : {info.last_update} ({days} days)')
     else:
-        click.echo(f'Last update: Unknown')
-    click.echo(f'Mirror: "{info.mirror_name}"')
-
+        click.echo(f'Last update     : Unknown')
+    click.echo(f'Tracks total    : {len(info.tracks)}')
+    click.echo(f'Tracks listened : {len(info.listened_tracks)}')
+    click.echo(f'Favorite tracks : {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
+    click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
+    for i, pl_info in enumerate(info.fav_tracks_by_playlists):
+        click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')

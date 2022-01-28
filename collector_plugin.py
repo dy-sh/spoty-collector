@@ -60,8 +60,13 @@ class UserLibrary:
     listened_tracks: []
     fav_tracks: {}  # isrc: [length, length, length]
     all_playlists: []
-    fav_playlists: {}  # playlist_id: [track, track, track]
+    fav_playlists: {}  # playlist_name: [track, track, track]
     log: {}  # sub_playlist_id: [track, track, track]
+
+
+class FavPlaylistInfo:
+    playlist_name: str
+    tracks_count: int
 
 
 class SubscriptionInfo:
@@ -70,7 +75,7 @@ class SubscriptionInfo:
     tracks: List
     listened_tracks: List
     fav_tracks: List
-    fav_tracks_by_playlists: {}  # playlist_id: [track, track, track]
+    fav_tracks_by_playlists: List[FavPlaylistInfo]
     fav_percentage: float
     last_update: datetime
 
@@ -700,7 +705,7 @@ def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, confirm=Fa
             if info.fav_percentage < REDUCE_PERCENTAGE_OF_GOOD_TRACKS:
                 click.echo(
                     f'\n"{info.playlist["name"]}" ({info.playlist["id"]}) playlist has only {len(info.fav_tracks)} '
-                    f'favourite from {len(info.listened_tracks)} listened tracks (total tracks: {len(info.tracks)}).')
+                    f'favorite from {len(info.listened_tracks)} listened tracks (total tracks: {len(info.tracks)}).')
                 if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
                     unsubscribe([info.playlist['id']], False, True, False, user_playlists)
                     all_unsubscribed.append(info.playlist['id'])
@@ -795,19 +800,19 @@ def get_user_library(read_log=True) -> UserLibrary:
     fav_tracks, fav_tags, fav_playlists = spotify_api.get_tracks_from_playlists(fav_playlists)
 
     lib.fav_tracks = {}  # isrc: [length, length, length]
-    lib.fav_playlists = {}  # playlist_id: [isrc: [length, length], isrc: [length, length]]
+    lib.fav_playlists = {}  # playlist_name: [isrc: [length, length], isrc: [length, length]]
     for tags in fav_tags:
         isrc = tags['ISRC']
         if isrc not in lib.fav_tracks:
             lib.fav_tracks[isrc] = []
         lib.fav_tracks[isrc].append(tags['SPOTY_LENGTH'])
 
-        playlist_id = tags['SPOTY_PLAYLIST_ID']
-        if playlist_id not in lib.fav_playlists:
-            lib.fav_playlists[playlist_id] = {}
-        if isrc not in lib.fav_playlists[playlist_id]:
-            lib.fav_playlists[playlist_id][isrc] = []
-        lib.fav_playlists[playlist_id][isrc].append(tags['SPOTY_LENGTH'])
+        playlist_name = tags['SPOTY_PLAYLIST_NAME']
+        if playlist_name not in lib.fav_playlists:
+            lib.fav_playlists[playlist_name] = {}
+        if isrc not in lib.fav_playlists[playlist_name]:
+            lib.fav_playlists[playlist_name][isrc] = []
+        lib.fav_playlists[playlist_name][isrc].append(tags['SPOTY_LENGTH'])
 
     return lib
 
@@ -847,14 +852,22 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary) -> Subscrip
                     tracks_exist_in_fav.append(track)
 
     tracks_exist_in_fav_playlists = {}
-    for playlist_id, fav_tracks in data.fav_playlists.items():
+    for playlist_name, fav_tracks in data.fav_playlists.items():
         for track in listened_or_liked:
             if track['ISRC'] in fav_tracks:
                 for length in fav_tracks[track['ISRC']]:
                     if length == track['SPOTY_LENGTH']:
-                        if playlist_id not in tracks_exist_in_fav_playlists:
-                            tracks_exist_in_fav_playlists[playlist_id] = []
-                        tracks_exist_in_fav_playlists[playlist_id].append(track)
+                        if playlist_name not in tracks_exist_in_fav_playlists:
+                            tracks_exist_in_fav_playlists[playlist_name] = []
+                        tracks_exist_in_fav_playlists[playlist_name].append(track)
+
+    fav_tracks_by_playlists = []
+    for playlist_name, tracks in tracks_exist_in_fav_playlists.items():
+        i = FavPlaylistInfo()
+        i.playlist_name = playlist_name
+        i.tracks_count = len(tracks)
+        fav_tracks_by_playlists.append(i)
+    fav_tracks_by_playlists = sorted(fav_tracks_by_playlists, key=lambda x: x.tracks_count, reverse=True)
 
     fav_percentage = len(tracks_exist_in_fav) / len(listened_or_liked) * 100
 
@@ -871,7 +884,7 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary) -> Subscrip
     info.playlist = sub_playlist
     info.listened_tracks = listened_or_liked
     info.fav_tracks = tracks_exist_in_fav
-    info.fav_tracks_by_playlists = tracks_exist_in_fav_playlists
+    info.fav_tracks_by_playlists = fav_tracks_by_playlists
     info.tracks = sub_tags_list
 
     for mirror_name, subs in data.mirrors.items():
