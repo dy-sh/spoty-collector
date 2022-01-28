@@ -42,7 +42,7 @@ Next, use "update" command to create mirrors and update it (see "update --help")
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscriptions(mirrors)
+    all_subs = col.get_all_subscriptions(mirrors)
     click.echo(f'{len(new_subs)} new playlists added to subscriptions (total subscriptions: {len(all_subs)}).')
     if update:
         ctx.invoke(update_mirrors, mirror_id=new_mirrors)
@@ -65,7 +65,7 @@ PLAYLIST_IDS - IDs or URIs of subscribed playlists
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, remove_tracks, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscriptions(mirrors)
+    all_subs = col.get_all_subscriptions(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -80,7 +80,7 @@ Unsubscribe from all specified playlists.
     """
     unsubscribed = col.unsubscribe_all(remove_mirror, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscriptions(mirrors)
+    all_subs = col.get_all_subscriptions(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -98,7 +98,7 @@ MIRROR_PLAYLIST_IDS - IDs or URIs of mirror playlists.
     mirror_playlist_ids = spoty.utils.tuple_to_list(mirror_playlist_ids)
     unsubscribed = col.unsubscribe_mirrors_by_id(mirror_playlist_ids, remove_mirror, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscriptions(mirrors)
+    all_subs = col.get_all_subscriptions(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -116,7 +116,7 @@ MIRROR_NAMES - names of mirror playlists.
     mirror_names = spoty.utils.tuple_to_list(mirror_names)
     unsubscribed = col.unsubscribe_mirrors_by_name(mirror_names, remove_mirror, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscriptions(mirrors)
+    all_subs = col.get_all_subscriptions(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -481,3 +481,40 @@ PLAYLIST_ID - ID or URI of playlist.
         click.echo(f'Last update: {info.last_update} ({days} days ago)')
     else:
         click.echo(f'Last update: Unknown')
+
+
+@collector.command("info-mirror")
+@click.argument("mirror_playlist_id")
+@click.option('--dont-read-log', '-L', is_flag=True,
+              help='Do not read mirrors history from log file (use current playlists state only).')
+def info_sub(mirror_playlist_id, dont_read_log):
+    """
+Print info about specified mirror.
+
+PLAYLIST_ID - mirror playlist ID or URI.
+    """
+    subs = col.get_subs_by_mirror_playlist_id(mirror_playlist_id)
+
+    if subs is None:
+        exit()
+
+    data = col.get_mirrors_data(not dont_read_log)
+    infos = []
+
+    with click.progressbar(subs, label=f'Collecting info for {len(subs)} subscribed playlists') as bar:
+        for id in bar:
+            info = col.__get_subscription_info(id, data)
+            infos.append(info)
+
+    for info in infos:
+        days = (datetime.today() - info.last_update).days
+
+        click.echo("------------------------------------------")
+        click.echo(f'Playlist: "{info.playlist["name"]}" ({info.playlist["id"]})')
+        click.echo(f'Tracks total: {len(info.tracks)}')
+        click.echo(f'Tracks listened: {len(info.listened_tracks)}')
+        click.echo(f'Favourite tracks: {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
+        if days < 10000:
+            click.echo(f'Last update: {info.last_update} ({days} days ago)')
+        else:
+            click.echo(f'Last update: Unknown')

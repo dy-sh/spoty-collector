@@ -97,11 +97,37 @@ def write_mirrors(mirrors: dict):
                 file.write(f'{playlist_id},{mirror_name}\n')
 
 
-def get_subscriptions(mirrors: dict):
+def get_all_subscriptions(mirrors: dict):
     all_subs = []
     for mirror, subs in mirrors.items():
         all_subs.extend(subs)
     return all_subs
+
+
+def get_subs_by_mirror_playlist_id(mirror_playlist_id):
+    mirrors = read_mirrors()
+    mirror_playlist = spotify_api.get_playlist(mirror_playlist_id)
+
+    if mirror_playlist is None:
+        click.echo(f'Mirror playlist "{mirror_playlist_id}" not found.')
+        return None
+
+    mirror = mirror_playlist["name"]
+    if mirror not in mirrors:
+        click.echo(f'Playlist "{mirror}" ({mirror_playlist_id}) is not a mirror playlist.')
+        return None
+
+    return mirrors[mirror]
+
+
+def get_subs_by_mirror_name(mirror_name):
+    mirrors = read_mirrors()
+
+    if mirror_name not in mirrors:
+        click.echo(f'Mirror "{mirror_name}" nor found.')
+        return None
+
+    return mirrors[mirror_name]
 
 
 def read_listened():
@@ -176,7 +202,7 @@ def subscribe(playlist_ids: list, mirror_name=None):
             click.echo(f'PLaylist "{playlist_id}" not found.')
             continue
 
-        all_subs = get_subscriptions(mirrors)
+        all_subs = get_all_subscriptions(mirrors)
         if playlist_id in all_subs:
             click.echo(f'"{playlist["name"]}" ({playlist_id}) playlist skipped. Already subscribed.')
             continue
@@ -250,7 +276,7 @@ def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, remove_tracks_from
         if playlist is not None:
             playlist_name = playlist['name']
 
-        all_subs = get_subscriptions(mirrors)
+        all_subs = get_all_subscriptions(mirrors)
         if sub_playlist_id not in all_subs:
             click.echo(f'Not subscribed to playlist "{playlist_name}" ({sub_playlist_id}). Skipped.')
             continue
@@ -269,7 +295,7 @@ def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, remove_tracks_from
 
 def unsubscribe_all(remove_mirror=False, confirm=False):
     mirrors = read_mirrors()
-    subs = get_subscriptions(mirrors)
+    subs = get_all_subscriptions(mirrors)
     unsubscribed = unsubscribe(subs, remove_mirror, False, confirm)
     return unsubscribed
 
@@ -310,7 +336,7 @@ def unsubscribe_mirrors_by_name(mirror_names, remove_mirrors, confirm):
 
 def list_playlists(fast=True):
     mirrors = read_mirrors()
-    all_playlists = get_subscriptions(mirrors)
+    all_playlists = get_all_subscriptions(mirrors)
     for mirror, playlist_ids in mirrors.items():
         click.echo(f'Mirror "{mirror}":')
         for playlist_id in playlist_ids:
@@ -331,7 +357,7 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None):
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
         exit()
 
-    subs = get_subscriptions(mirrors)
+    subs = get_all_subscriptions(mirrors)
 
     if mirror_ids is not None:
         for i in range(len(mirror_ids)):
@@ -706,11 +732,15 @@ def get_all_subscriptions_info(read_log=True) -> List[SubscriptionInfo]:
     return infos
 
 
-def get_subscription_info(sub_playlist_id: str, read_log=True) -> SubscriptionInfo:
+def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> SubscriptionInfo:
     data = get_mirrors_data(read_log)
-    info = __get_subscription_info(sub_playlist_id, data)
+    infos = []
 
-    return info
+    for id in sub_playlist_ids:
+        info = __get_subscription_info(id, data)
+        infos.append(info)
+
+    return infos
 
 
 def get_mirrors_data(read_log=True) -> MirrorsData:
@@ -722,7 +752,7 @@ def get_mirrors_data(read_log=True) -> MirrorsData:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
         exit()
 
-    data.subs = get_subscriptions(data.mirrors)
+    data.subs = get_all_subscriptions(data.mirrors)
 
     data.listened = read_listened()
 
