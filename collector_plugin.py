@@ -699,7 +699,7 @@ def reduce_mirrors(read_log=True, unsub=True, confirm=False):
             # get liked tracks
             liked, not_liked = spotify_api.get_liked_tags_list(not_listened)
 
-            listened_or_liked = listened
+            listened_or_liked = listened.copy()
             listened_or_liked.extend(liked)
 
             if read_log:
