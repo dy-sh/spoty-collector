@@ -384,10 +384,10 @@ def list_playlists(fast=True, group: str = None):
     mirrors_count = 0
 
     for group, mirrors_in_grp in mirrors_dict.items():
-        click.echo(f'\n====================== Group "{group}" =========================')
+        click.echo(f'\n============================= Group "{group}" =================================')
         for mirror_name, sub_ids in mirrors_in_grp.items():
             mirrors_count += 1
-            click.echo(f'Mirror "{mirror_name}":')
+            click.echo(f'\n"{mirror_name}":')
             for playlist_id in sub_ids:
                 if fast:
                     click.echo(f'  {playlist_id}')
@@ -397,6 +397,7 @@ def list_playlists(fast=True, group: str = None):
                         click.echo(f'  Playlist "{playlist_id}" not found.')
                         continue
                     click.echo(f'  {playlist_id} "{playlist["name"]}"')
+    click.echo(f'----------------------------------------------------------------------------')
     click.echo(f'Total {len(all_playlists)} subscribed playlists in {mirrors_count} mirrors.')
 
 
