@@ -724,7 +724,7 @@ def get_all_subscriptions_info(read_log=True) -> List[SubscriptionInfo]:
     infos = []
 
     with click.progressbar(data.subs,
-                           label=f'Reducing {len(data.mirrors)} mirrors ({len(data.subs)} subscribed playlists)') as bar:
+                           label=f'Collecting info for {len(data.mirrors)} mirrors ({len(data.subs)} subscribed playlists)') as bar:
         for sub_playlist_id in bar:
             info = __get_subscription_info(sub_playlist_id, data)
             infos.append(info)
