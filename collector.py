@@ -518,3 +518,40 @@ PLAYLIST_ID - mirror playlist ID or URI.
             click.echo(f'Last update: {info.last_update} ({days} days ago)')
         else:
             click.echo(f'Last update: Unknown')
+
+
+@collector.command("info-mirror-name")
+@click.argument("mirror_name")
+@click.option('--dont-read-log', '-L', is_flag=True,
+              help='Do not read mirrors history from log file (use current playlists state only).')
+def info_sub(mirror_name, dont_read_log):
+    """
+Print info about specified mirror.
+
+MIRROR_NAME - mirror name.
+    """
+    subs = col.get_subs_by_mirror_name(mirror_name)
+
+    if subs is None:
+        exit()
+
+    data = col.get_mirrors_data(not dont_read_log)
+    infos = []
+
+    with click.progressbar(subs, label=f'Collecting info for {len(subs)} subscribed playlists') as bar:
+        for id in bar:
+            info = col.__get_subscription_info(id, data)
+            infos.append(info)
+
+    for info in infos:
+        days = (datetime.today() - info.last_update).days
+
+        click.echo("------------------------------------------")
+        click.echo(f'Playlist: "{info.playlist["name"]}" ({info.playlist["id"]})')
+        click.echo(f'Tracks total: {len(info.tracks)}')
+        click.echo(f'Tracks listened: {len(info.listened_tracks)}')
+        click.echo(f'Favourite tracks: {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
+        if days < 10000:
+            click.echo(f'Last update: {info.last_update} ({days} days ago)')
+        else:
+            click.echo(f'Last update: Unknown')
