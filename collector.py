@@ -419,12 +419,12 @@ This will allow you to subscribe to only those playlists that contain enough goo
 
     click.echo("------------------------------------------")
     click.echo("Subscriptions by favorite percentage:")
-    click.echo("FAV.PERCENTAGE : LISTENED_COUNT/TRACKS_COUNT : PLAYLIST_ID : PLAYLIST_NAME")
+    click.echo("FAV.PERCENTAGE : LISTENED_COUNT / TRACKS_COUNT : PLAYLIST_ID : PLAYLIST_NAME")
 
     fav_subs = sorted(subs_by_fav_percentage, key=lambda x: x['fav_percentage'])
     for s in fav_subs:
         click.echo(
-            f'{s["fav_percentage"]:.1f} : {s["listened_count"]}/{s["tracks_count"]} : {s["playlist"]["id"]} : {s["playlist"]["name"]}')
+            f'{s["fav_percentage"]:.1f} : {s["listened_count"]} / {s["tracks_count"]} : {s["playlist"]["id"]} : {s["playlist"]["name"]}')
 
     click.echo("------------------------------------------")
     click.echo(f'{len(subs)} subscribed playlists total.')
