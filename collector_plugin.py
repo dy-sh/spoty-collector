@@ -208,17 +208,15 @@ def clean_listened():
     return good, duplicates
 
 
-def get_not_listened_tracks(new_tracks: list, show_progressbar=False):
+def get_not_listened_tracks(tracks: list, show_progressbar=False):
     all_listened_tracks = read_listened_tracks()
 
     # listened_tracks = []
     # new_tags_list, listened = utils.remove_exist_tags(all_listened, new_tags_list, ['SPOTIFY_TRACK_ID'], False)
     # listened_tags_list.extend(listened)
 
-    new_tracks, listened_tracks = utils.remove_exist_tags_by_isrc_and_length(all_listened_tracks, new_tracks,
+    new_tracks, listened_tracks = utils.remove_exist_tags_by_isrc_and_length(all_listened_tracks, tracks,
                                                                              show_progressbar)
-    listened_tracks.extend(listened_tracks)
-
     return new_tracks, listened_tracks
 
 
