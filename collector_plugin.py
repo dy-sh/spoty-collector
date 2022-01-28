@@ -8,6 +8,7 @@ from dynaconf import Dynaconf
 import os.path
 import click
 import re
+from datetime import datetime, timedelta
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -49,6 +50,7 @@ PLAYLISTS_WITH_FAVORITES = settings.COLLECTOR.PLAYLISTS_WITH_FAVORITES
 REDUCE_PERCENTAGE_OF_GOOD_TRACKS = settings.COLLECTOR.REDUCE_PERCENTAGE_OF_GOOD_TRACKS
 REDUCE_MINIMUM_LISTENED_TRACKS = settings.COLLECTOR.REDUCE_MINIMUM_LISTENED_TRACKS
 REDUCE_IGNORE_PLAYLISTS = settings.COLLECTOR.REDUCE_IGNORE_PLAYLISTS
+REDUCE_IF_NOT_UPDATED_DAYS = settings.COLLECTOR.REDUCE_IF_NOT_UPDATED_DAYS
 
 
 def read_mirrors():
@@ -627,7 +629,7 @@ def find_in_mirrors_log(track_id):
     return records
 
 
-def reduce_mirrors(read_log=True, unsub=True, confirm=False):
+def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, confirm=False):
     mirrors = read_mirrors()
     if len(mirrors.items()) == 0:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
@@ -734,11 +736,34 @@ def reduce_mirrors(read_log=True, unsub=True, confirm=False):
             })
 
             if unsub:
+                removed = False
                 if fav_percentage < REDUCE_PERCENTAGE_OF_GOOD_TRACKS:
                     click.echo(
                         f'\n"{sub_playlist["name"]}" ({sub_playlist["id"]}) playlist has only {len(tracks_exist_in_fav)} favourite from {len(listened_or_liked)} listened tracks (total tracks: {len(sub_tags_list)}).')
                     if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
                         unsubscribe([sub_playlist['id']], False, True, False, user_playlists)
                         all_unsubscribed.append(sub_playlist['id'])
+                        removed = True
+
+                if check_update_date and not removed:
+                    if len(listened_or_liked) == len(sub_tags_list):
+                        specified_date = datetime.today() - timedelta(days=REDUCE_IF_NOT_UPDATED_DAYS)
+                        # filtered = utils.filter_added_after_date(sub_tags_list, str(date))
+                        last_update = None
+                        for tags in sub_tags_list:
+                            if 'SPOTY_TRACK_ADDED' in tags:
+                                track_added = datetime.strptime(tags['SPOTY_TRACK_ADDED'], "%Y-%m-%d %H:%M:%S")
+                            if last_update == None or last_update < track_added:
+                                last_update = track_added
+
+                        if last_update < specified_date:
+                            days = (datetime.today() - last_update).days
+                            if days < 10000:  # some tracks have 1970 year added!
+                                click.echo(
+                                    f'\n"{sub_playlist["name"]}" ({sub_playlist["id"]}) playlist not updated {days} days.')
+                                if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
+                                    unsubscribe([sub_playlist['id']], False, True, False, user_playlists)
+                                    all_unsubscribed.append(sub_playlist['id'])
+                                    removed = True
 
     return subs, all_not_listened_subs, subs_by_fav_percentage, all_unsubscribed, all_ignored
