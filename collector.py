@@ -33,16 +33,18 @@ Prints configuration parameters.
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--mirror-name', '--n',
               help='A mirror playlist with the specified name will be added to the library. You can subscribe to multiple playlists by merging them into one mirror. If not specified, the playlist name will be used as mirror name.')
+@click.option('--mirror-group', '--g', default="main", show_default=True,
+              help='Mirror group name. ')
 @click.option('--update', '-u', is_flag=True,
               help='Execute "update" command for this mirror after subscription.')
 @click.pass_context
-def subscribe(ctx, playlist_ids, mirror_name, update):
+def subscribe(ctx, playlist_ids, mirror_group, mirror_name, update):
     """
 Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name)
+    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, mirror_group)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscribed_playlist_ids(mirrors)
     click.echo(f'{len(new_subs)} new playlists added to subscriptions (total subscriptions: {len(all_subs)}).')
@@ -86,6 +88,26 @@ Unsubscribe from all specified playlists.
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
+@collector.command("unsub-group")
+@click.argument("group_name")
+@click.option('--remove-mirror', '-r', is_flag=True,
+              help='Remove mirror playlists from the library.')
+@click.option('--remove-tracks', '-t', is_flag=True,
+              help='Remove tracks in mirror playlists that exist in unsubscribed playlists.')
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for confirmation of deleting playlists.')
+def unsubscribe_all(group_name, remove_mirror, remove_tracks, confirm):
+    """
+Unsubscribe from all playlists in specified group.
+    """
+    mirrors = col.read_mirrors(group_name)
+    playlist_ids = col.get_subscribed_playlist_ids(mirrors)
+    unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, remove_tracks, confirm)
+    mirrors = col.read_mirrors()
+    all_subs = col.get_subscribed_playlist_ids(mirrors)
+    click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
+
+
 @collector.command("unsub-mirror")
 @click.argument("mirror_playlist_ids", nargs=-1)
 @click.option('--remove-mirror', '-r', is_flag=True,
@@ -123,23 +145,27 @@ MIRROR_NAMES - names of mirror playlists.
 
 
 @collector.command("list")
+@click.option('--mirror-group', '--g',
+              help='Mirror group name (all if not specified).')
 @click.option('--fast', '-f', is_flag=True,
               help='Do not request playlist names (fast).')
-def list_mirrors(fast):
+def list_mirrors(fast,mirror_group):
     """
 Display a list of mirrors and subscribed playlists.
     """
-    col.list_playlists(fast)
+    col.list_playlists(fast, mirror_group)
 
 
 @collector.command("update")
+@click.option('--mirror-group', '--g',
+              help='Mirror group name (all if not specified).')
 @click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists.')
-@click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete mirror playlist confirmation.')
 @click.option('--mirror-id', '---m', multiple=True,
               help='Update only specified mirrors.')
-def update_mirrors(do_not_remove, confirm, mirror_id):
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for delete mirror playlist confirmation.')
+def update_mirrors(mirror_group, do_not_remove, confirm, mirror_id):
     """
 Update all subscriptions.
 
@@ -150,7 +176,7 @@ When executed, the following will happen:
 - All tracks with likes will be added to listened list and removed from mirror playlists.
     """
     mirror_ids = spoty.utils.tuple_to_list(mirror_id)
-    col.update(not do_not_remove, confirm, mirror_ids)
+    col.update(not do_not_remove, confirm, mirror_ids, mirror_group)
 
 
 @collector.command("listened-count")
@@ -470,7 +496,7 @@ PLAYLIST_ID - ID or URI of playlist.
     """
     playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
-    info = col.get_subscription_info(playlist_id, not dont_read_log)
+    info = col.get_subscriptions_info(playlist_id, not dont_read_log)
 
     days = (datetime.today() - info.last_update).days
 
