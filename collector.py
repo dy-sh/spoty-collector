@@ -4,6 +4,7 @@ from spoty import spotify_api
 from spoty.commands.spotify_like_commands import like_import
 import click
 import re
+from datetime import datetime, timedelta
 
 
 @click.group("collector")
@@ -408,7 +409,6 @@ Specify the track ID and find out to which mirrors it was added from which subsc
         click.echo(f'{rec[2]} : {rec[0]}')
 
 
-
 @collector.command("reduce")
 @click.option('--dont-check-update-date', '-D', is_flag=True,
               help='Do not check last updated date of subscribed playlist.')
@@ -418,7 +418,7 @@ Specify the track ID and find out to which mirrors it was added from which subsc
               help='Do not unsubscribe (list only).')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask any questions.')
-def reduce_mirrors(dont_check_update_date,dont_read_log, dont_unsubscribe, confirm):
+def reduce_mirrors(dont_check_update_date, dont_read_log, dont_unsubscribe, confirm):
     """
 Remove playlists from subscriptions that contain few good tracks.
 
@@ -436,14 +436,15 @@ This will allow you to subscribe to only those playlists that contain enough goo
     infos, all_not_listened, all_unsubscribed, all_ignored \
         = col.reduce_mirrors(not dont_check_update_date, not dont_read_log, not dont_unsubscribe, confirm)
 
-    click.echo("------------------------------------------")
+    click.echo("\n------------------------------------------")
     click.echo("Subscriptions by favorite percentage:")
     click.echo("FAV.PERCENTAGE : LISTENED_COUNT / TRACKS_COUNT : PLAYLIST_ID : PLAYLIST_NAME")
 
-    fav_subs = sorted(infos, key=lambda x: x.fav_percentage)
-    for s in fav_subs:
+    infos = sorted(infos, key=lambda x: x.fav_percentage)
+
+    for info in infos:
         click.echo(
-            f'{s.fav_percentage:.1f} : {len(s.listened_tracks)} / {len(s.tracks)} : {s.playlist["id"]} : {s.playlist["name"]}')
+            f'{info.fav_percentage:.1f} : {len(info.listened_tracks)} / {len(info.tracks)} : {info.playlist["id"]} : {info.playlist["name"]}')
 
     click.echo("------------------------------------------")
     click.echo(f'{len(infos)} subscribed playlists total.')
@@ -453,3 +454,30 @@ This will allow you to subscribe to only those playlists that contain enough goo
         click.echo(f'{len(all_ignored)} playlists skipped due to too few tracks listened.')
     if len(all_unsubscribed) > 0:
         click.echo(f'{len(all_unsubscribed)} playlists unsubscribed.')
+
+
+@collector.command("info-sub")
+@click.argument("playlist_id")
+@click.option('--dont-read-log', '-L', is_flag=True,
+              help='Do not read mirrors history from log file (use current playlists state only).')
+def info_sub(playlist_id, dont_read_log):
+    """
+Print collected info about subscription (or any other) playlists.
+
+PLAYLIST_ID - ID or URI of playlist.
+    """
+    playlist_id = spotify_api.parse_playlist_id(playlist_id)
+
+    info = col.get_subscription_info(playlist_id, not dont_read_log)
+
+    days = (datetime.today() - info.last_update).days
+
+    click.echo("------------------------------------------")
+    click.echo(f'Playlist: "{info.playlist["name"]}" ({info.playlist["id"]})')
+    click.echo(f'Tracks total: {len(info.tracks)}')
+    click.echo(f'Tracks listened: {len(info.listened_tracks)}')
+    click.echo(f'Favourite tracks: {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
+    if days < 10000:
+        click.echo(f'Last update: {info.last_update} ({days} days ago)')
+    else:
+        click.echo(f'Last update: Unknown')
