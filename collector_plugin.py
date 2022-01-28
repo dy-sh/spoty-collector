@@ -641,14 +641,20 @@ def reduce_mirrors(read_log=True, unsub=True, confirm=False):
         click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
         exit()
 
-    log_dict = {}  # {sub_playlist_id: [track_id, track_id, track_id]}
+    log_dict = {}  # {sub_playlist_id: [track track, track]}
     if read_log:
+        listened_dict = {}
+        for track in listened:
+            listened_dict[track['SPOTIFY_TRACK_ID']] = track
+
         log = read_mirrors_log()
         for l in log:
-            sub_playlist_id = l[2]
-            if sub_playlist_id not in log_dict:
-                log_dict[sub_playlist_id] = []
-            log_dict[sub_playlist_id].append(l[1])
+            track_id = l[1]
+            if track_id in listened_dict:
+                sub_playlist_id = l[2]
+                if sub_playlist_id not in log_dict:
+                    log_dict[sub_playlist_id] = {}
+                log_dict[sub_playlist_id][track_id] = listened_dict[track_id]
 
     user_playlists = spotify_api.get_list_of_playlists()
 
@@ -695,6 +701,19 @@ def reduce_mirrors(read_log=True, unsub=True, confirm=False):
 
             listened_or_liked = listened
             listened_or_liked.extend(liked)
+
+            if read_log:
+                if sub_id in log_dict:
+                    sub_tags_dict={}
+                    for sub_track in sub_tags_list:
+                        sub_tags_dict[sub_track['SPOTIFY_TRACK_ID']] = sub_track
+
+                    log_tracks = log_dict[sub_id]
+                    for log_track_id, log_track in log_tracks.items():
+                        if log_track_id not in sub_tags_dict:
+                            sub_tags_list.append(log_track)
+                            listened_or_liked.append(log_track)
+
 
             if len(listened_or_liked) < REDUCE_MINIMUM_LISTENED_TRACKS:
                 all_not_listened_subs.append(sub_playlist)
