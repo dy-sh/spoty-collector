@@ -1,4 +1,5 @@
 import spoty.plugins.collector.collector_plugin as col
+from spoty.plugins.collector.collector_plugin import SubscriptionInfo
 import spoty.utils
 from spoty import spotify_api
 from spoty.commands.spotify_like_commands import like_import
@@ -550,7 +551,7 @@ Print info all mirrors.
         print_mirror_info(info)
 
 
-def print_mirror_info(info):
+def print_mirror_info(info: SubscriptionInfo):
     days = (datetime.today() - info.last_update).days
     click.echo("------------------------------------------")
     click.echo(f'Playlist: "{info.playlist["name"]}" ({info.playlist["id"]})')
@@ -562,3 +563,4 @@ def print_mirror_info(info):
     else:
         click.echo(f'Last update: Unknown')
     click.echo(f'Mirror: "{info.mirror_name}"')
+
