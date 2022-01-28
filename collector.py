@@ -6,6 +6,7 @@ from spoty.commands.spotify_like_commands import like_import
 import click
 import re
 from datetime import datetime, timedelta
+from typing import List
 
 
 @click.group("collector")
@@ -507,8 +508,7 @@ PLAYLIST_ID - mirror playlist ID or URI.
             info = col.__get_subscription_info(id, data)
             infos.append(info)
 
-    for info in infos:
-        print_mirror_info(info)
+    print_mirror_infos(infos)
 
 
 @collector.command("info-mirror-name")
@@ -534,8 +534,7 @@ MIRROR_NAME - mirror name.
             info = col.__get_subscription_info(id, data)
             infos.append(info)
 
-    for info in infos:
-        print_mirror_info(info)
+    print_mirror_infos(infos)
 
 
 @collector.command("info-all")
@@ -547,14 +546,24 @@ Print info all mirrors.
     """
     infos = col.get_all_subscriptions_info(not dont_read_log)
 
-    for info in infos:
-        print_mirror_info(info)
+    print_mirror_infos(infos)
 
 
-def print_mirror_info(info: SubscriptionInfo):
+def print_mirror_infos(infos: List[SubscriptionInfo]):
+    for i, info in enumerate(infos):
+        print_mirror_info(info, i, len(infos))
+
+
+def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = None):
+    if index is not None and count is not None:
+        click.echo(f"\n============================== {index + 1} / {count} ==============================\n")
+    else:
+        click.echo("\n======================================================================\n")
+
     days = (datetime.today() - info.last_update).days
-    click.echo("\n=====================================================================\n")
-    click.echo(f'Mirror          : "{info.mirror_name}"')
+
+    if info.mirror_name is not None:
+        click.echo(f'Mirror          : "{info.mirror_name}"')
     click.echo(f'Playlist        : "{info.playlist["name"]}" ({info.playlist["id"]})')
     if days < 10000:
         click.echo(f'Last update     : {info.last_update} ({days} days)')
@@ -566,3 +575,40 @@ def print_mirror_info(info: SubscriptionInfo):
     click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
     for i, pl_info in enumerate(info.fav_tracks_by_playlists):
         click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')
+
+
+@collector.command("find-best")
+@click.option('--include-subscribed', '-s', is_flag=True,
+              help='Include already subscribed playlists.')
+@click.option('--include-listened', '-l', is_flag=True,
+              help='Include playlists that are fully listened to.')
+@click.option('--limit', type=int, default=10, show_default=True,
+              help='Limit the number of playlists found.')
+@click.argument("search_query")
+def find_best_playlist(search_query, include_subscribed, include_listened, limit):
+    """
+Find best public playlist by specified search query.
+    """
+    mirrors = col.read_mirrors()
+    subs = col.get_subscribed_playlist_ids(mirrors)
+
+    playlists = spotify_api.find_playlist_by_query(search_query, limit)
+    new_playlists = []
+    for playlist in playlists:
+        if not include_subscribed:
+            if playlist['id'] in subs:
+                continue
+        new_playlists.append(playlist)
+
+    data = col.get_user_library(True)
+    infos = []
+
+    with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
+        for playlist in bar:
+            info = col.__get_subscription_info(playlist['id'], data)
+            infos.append(info)
+
+    infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
+    infos = sorted(infos, key=lambda x: x.fav_percentage)
+
+    print_mirror_infos(infos)

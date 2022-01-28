@@ -70,7 +70,7 @@ class FavPlaylistInfo:
 
 
 class SubscriptionInfo:
-    mirror_name: str
+    mirror_name: str = None
     playlist: dict
     tracks: List
     listened_tracks: List
