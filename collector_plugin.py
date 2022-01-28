@@ -704,7 +704,7 @@ def reduce_mirrors(read_log=True, unsub=True, confirm=False):
 
             if read_log:
                 if sub_id in log_dict:
-                    sub_tags_dict={}
+                    sub_tags_dict = {}
                     for sub_track in sub_tags_list:
                         sub_tags_dict[sub_track['SPOTIFY_TRACK_ID']] = sub_track
 
@@ -714,8 +714,7 @@ def reduce_mirrors(read_log=True, unsub=True, confirm=False):
                             sub_tags_list.append(log_track)
                             listened_or_liked.append(log_track)
 
-
-            if len(listened_or_liked) < REDUCE_MINIMUM_LISTENED_TRACKS:
+            if len(listened_or_liked) == 0 or len(listened_or_liked) < REDUCE_MINIMUM_LISTENED_TRACKS:
                 all_not_listened_subs.append(sub_playlist)
                 continue
 
@@ -726,7 +725,7 @@ def reduce_mirrors(read_log=True, unsub=True, confirm=False):
                         if length == track['SPOTY_LENGTH']:
                             tracks_exist_in_fav.append(track)
 
-            fav_percentage = len(tracks_exist_in_fav) / len(listened) * 100
+            fav_percentage = len(tracks_exist_in_fav) / len(listened_or_liked) * 100
             subs_by_fav_percentage.append({
                 'fav_percentage': fav_percentage,
                 'playlist': sub_playlist,
