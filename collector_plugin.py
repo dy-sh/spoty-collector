@@ -9,6 +9,7 @@ import os.path
 import click
 import re
 from datetime import datetime, timedelta
+from typing import List
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -51,6 +52,24 @@ REDUCE_PERCENTAGE_OF_GOOD_TRACKS = settings.COLLECTOR.REDUCE_PERCENTAGE_OF_GOOD_
 REDUCE_MINIMUM_LISTENED_TRACKS = settings.COLLECTOR.REDUCE_MINIMUM_LISTENED_TRACKS
 REDUCE_IGNORE_PLAYLISTS = settings.COLLECTOR.REDUCE_IGNORE_PLAYLISTS
 REDUCE_IF_NOT_UPDATED_DAYS = settings.COLLECTOR.REDUCE_IF_NOT_UPDATED_DAYS
+
+
+class MirrorsData:
+    mirrors: []
+    subs: []
+    listened: []
+    log_dict: {}
+    user_playlists: []
+    fav_tracks_dict: {}
+
+
+class SubscriptionInfo:
+    playlist: dict
+    tracks: List
+    listened_tracks: List
+    fav_tracks: List
+    fav_percentage: float
+    last_update: datetime
 
 
 def read_mirrors():
@@ -630,35 +649,103 @@ def find_in_mirrors_log(track_id):
 
 
 def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, confirm=False):
-    mirrors = read_mirrors()
-    if len(mirrors.items()) == 0:
+    all_unsubscribed = []
+    all_not_listened = []
+    all_ignored = []
+
+    infos = get_all_subscriptions_info(read_log)
+    user_playlists = spotify_api.get_list_of_playlists()
+
+    for info in infos:
+        if info.playlist["id"] in REDUCE_IGNORE_PLAYLISTS:
+            all_ignored.append(info.playlist["id"])
+            continue
+
+        if len(info.listened_tracks) == 0 or len(info.listened_tracks) < REDUCE_MINIMUM_LISTENED_TRACKS:
+            all_not_listened.append(info.playlist)
+            continue
+
+        if unsub:
+            removed = False
+            if info.fav_percentage < REDUCE_PERCENTAGE_OF_GOOD_TRACKS:
+                click.echo(
+                    f'\n"{info.playlist["name"]}" ({info.playlist["id"]}) playlist has only {len(info.fav_tracks)} '
+                    f'favourite from {len(info.listened_tracks)} listened tracks (total tracks: {len(info.tracks)}).')
+                if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
+                    unsubscribe([info.playlist['id']], False, True, False, user_playlists)
+                    all_unsubscribed.append(info.playlist['id'])
+                    removed = True
+
+            if check_update_date and not removed:
+                if len(info.listened_tracks) == len(info.tracks):
+                    specified_date = datetime.today() - timedelta(days=REDUCE_IF_NOT_UPDATED_DAYS)
+                    # filtered = utils.filter_added_after_date(sub_tags_list, str(date))
+                    if info.last_update < specified_date:
+                        days = (datetime.today() - info.last_update).days
+                        if days < 10000:  # some tracks have 1970 year added!
+                            click.echo(
+                                f'\n"{info.playlist["name"]}" ({info.playlist["id"]}) playlist not updated {days} days.')
+                            if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
+                                unsubscribe([info.playlist['id']], False, True, False, user_playlists)
+                                all_unsubscribed.append(info.playlist['id'])
+                                removed = True
+
+    return infos, all_not_listened, all_unsubscribed, all_ignored
+
+
+def get_all_subscriptions_info(read_log=True) -> List[SubscriptionInfo]:
+    data = get_mirrors_data(read_log)
+    infos = []
+
+    with click.progressbar(data.subs,
+                           label=f'Reducing {len(data.mirrors)} mirrors ({len(data.subs)} subscribed playlists)') as bar:
+        for sub_playlist_id in bar:
+            info = __get_subscription_info(sub_playlist_id, data)
+            infos.append(info)
+
+    return infos
+
+
+def get_subscription_info(sub_playlist_id: str, read_log=True) -> SubscriptionInfo:
+    data = get_mirrors_data(read_log)
+    info = __get_subscription_info(sub_playlist_id, data)
+
+    return info
+
+
+def get_mirrors_data(read_log=True) -> MirrorsData:
+    data = MirrorsData()
+
+    data.mirrors = read_mirrors()
+
+    if len(data.mirrors.items()) == 0:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
         exit()
 
-    subs = get_subscriptions(mirrors)
+    data.subs = get_subscriptions(data.mirrors)
 
-    listened = read_listened()
-    # listened_dct = dict((track['SPOTIFY_TRACK_ID'], track) for track in listened)
-    if len(listened) == 0:
+    data.listened = read_listened()
+
+    if len(data.listened) == 0:
         click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
         exit()
 
-    log_dict = {}  # {sub_playlist_id: [track track, track]}
+    data.log_dict = {}  # {sub_playlist_id: [track track, track]}
     if read_log:
         listened_dict = {}
-        for track in listened:
+        for track in data.listened:
             listened_dict[track['SPOTIFY_TRACK_ID']] = track
 
         log = read_mirrors_log()
         for l in log:
             track_id = l[1]
             if track_id in listened_dict:
-                sub_playlist_id = l[2]
-                if sub_playlist_id not in log_dict:
-                    log_dict[sub_playlist_id] = {}
-                log_dict[sub_playlist_id][track_id] = listened_dict[track_id]
+                sub_id = l[2]
+                if sub_id not in data.log_dict:
+                    data.log_dict[sub_id] = {}
+                data.log_dict[sub_id][track_id] = listened_dict[track_id]
 
-    user_playlists = spotify_api.get_list_of_playlists()
+    data.user_playlists = spotify_api.get_list_of_playlists()
 
     if len(PLAYLISTS_WITH_FAVORITES) < 1:
         click.echo('No favorites playlists specified. Edit "PLAYLISTS_WITH_FAVORITES" field in settings.toml file '
@@ -667,103 +754,70 @@ def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, confirm=Fa
 
     fav_playlists = set()
     for rule in PLAYLISTS_WITH_FAVORITES:
-        for playlist in user_playlists:
+        for playlist in data.user_playlists:
             if re.findall(rule, playlist['name']):
                 fav_playlists.add(playlist['id'])
 
+    data.fav_tracks_dict = {}  # ISRC: [LENGTH,LENGTH,LENGTH]
     fav_tracks, fav_tags, fav_playlists = spotify_api.get_tracks_from_playlists(list(fav_playlists))
-    fav_tracks_dict = {}  # ISRC: [LENGTH,LENGTH,LENGTH]
     for tags in fav_tags:
         isrc = tags['ISRC']
-        if isrc not in fav_tracks_dict:
-            fav_tracks_dict[isrc] = []
-        fav_tracks_dict[isrc].append(tags['SPOTY_LENGTH'])
+        if isrc not in data.fav_tracks_dict:
+            data.fav_tracks_dict[isrc] = []
+        data.fav_tracks_dict[isrc].append(tags['SPOTY_LENGTH'])
 
-    all_not_listened_subs = []
-    subs_by_fav_percentage = []
-    all_unsubscribed = []
-    all_ignored = []
+    return data
 
-    with click.progressbar(subs, label=f'Reducing {len(mirrors)} mirrors ({len(subs)} subscribed playlists)') as bar:
-        for sub_id in bar:
-            if sub_id in REDUCE_IGNORE_PLAYLISTS:
-                all_ignored.append(sub_id)
-                continue
 
-            # get all tracks from subscribed playlists
-            sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_id)
-            sub_tracks = sub_playlist["tracks"]["items"]
-            sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+def __get_subscription_info(sub_playlist_id: str, data: MirrorsData) -> SubscriptionInfo:
+    # get all tracks from subscribed playlists
+    sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
+    sub_tracks = sub_playlist["tracks"]["items"]
+    sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
 
-            # get listened tracks
-            not_listened, listened = get_not_listened_tracks(sub_tags_list)
+    # get listened tracks
+    not_listened, listened = get_not_listened_tracks(sub_tags_list)
 
-            # get liked tracks
-            liked, not_liked = spotify_api.get_liked_tags_list(not_listened)
+    # get liked tracks
+    liked, not_liked = spotify_api.get_liked_tags_list(not_listened)
 
-            listened_or_liked = listened.copy()
-            listened_or_liked.extend(liked)
+    listened_or_liked = listened.copy()
+    listened_or_liked.extend(liked)
 
-            if read_log:
-                if sub_id in log_dict:
-                    sub_tags_dict = {}
-                    for sub_track in sub_tags_list:
-                        sub_tags_dict[sub_track['SPOTIFY_TRACK_ID']] = sub_track
+    if data.log_dict is not None:
+        if sub_playlist_id in data.log_dict:
+            sub_tags_dict = {}
+            for sub_track in sub_tags_list:
+                sub_tags_dict[sub_track['SPOTIFY_TRACK_ID']] = sub_track
 
-                    log_tracks = log_dict[sub_id]
-                    for log_track_id, log_track in log_tracks.items():
-                        if log_track_id not in sub_tags_dict:
-                            sub_tags_list.append(log_track)
-                            listened_or_liked.append(log_track)
+            log_tracks = data.log_dict[sub_playlist_id]
+            for log_track_id, log_track in log_tracks.items():
+                if log_track_id not in sub_tags_dict:
+                    sub_tags_list.append(log_track)
+                    listened_or_liked.append(log_track)
 
-            if len(listened_or_liked) == 0 or len(listened_or_liked) < REDUCE_MINIMUM_LISTENED_TRACKS:
-                all_not_listened_subs.append(sub_playlist)
-                continue
+    tracks_exist_in_fav = []
+    for track in listened_or_liked:
+        if track['ISRC'] in data.fav_tracks_dict:
+            for length in data.fav_tracks_dict[track['ISRC']]:
+                if length == track['SPOTY_LENGTH']:
+                    tracks_exist_in_fav.append(track)
 
-            tracks_exist_in_fav = []
-            for track in listened_or_liked:
-                if track['ISRC'] in fav_tracks_dict:
-                    for length in fav_tracks_dict[track['ISRC']]:
-                        if length == track['SPOTY_LENGTH']:
-                            tracks_exist_in_fav.append(track)
+    fav_percentage = len(tracks_exist_in_fav) / len(listened_or_liked) * 100
 
-            fav_percentage = len(tracks_exist_in_fav) / len(listened_or_liked) * 100
-            subs_by_fav_percentage.append({
-                'fav_percentage': fav_percentage,
-                'playlist': sub_playlist,
-                'listened_count': len(listened_or_liked),
-                'tracks_count': len(sub_tags_list)
-            })
+    last_update = None
+    for tags in sub_tags_list:
+        if 'SPOTY_TRACK_ADDED' in tags:
+            track_added = datetime.strptime(tags['SPOTY_TRACK_ADDED'], "%Y-%m-%d %H:%M:%S")
+            if last_update is None or last_update < track_added:
+                last_update = track_added
 
-            if unsub:
-                removed = False
-                if fav_percentage < REDUCE_PERCENTAGE_OF_GOOD_TRACKS:
-                    click.echo(
-                        f'\n"{sub_playlist["name"]}" ({sub_playlist["id"]}) playlist has only {len(tracks_exist_in_fav)} favourite from {len(listened_or_liked)} listened tracks (total tracks: {len(sub_tags_list)}).')
-                    if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
-                        unsubscribe([sub_playlist['id']], False, True, False, user_playlists)
-                        all_unsubscribed.append(sub_playlist['id'])
-                        removed = True
+    info = SubscriptionInfo()
+    info.fav_percentage = fav_percentage
+    info.last_update = last_update
+    info.playlist = sub_playlist
+    info.listened_tracks = listened_or_liked
+    info.fav_tracks = tracks_exist_in_fav
+    info.tracks = sub_tags_list
 
-                if check_update_date and not removed:
-                    if len(listened_or_liked) == len(sub_tags_list):
-                        specified_date = datetime.today() - timedelta(days=REDUCE_IF_NOT_UPDATED_DAYS)
-                        # filtered = utils.filter_added_after_date(sub_tags_list, str(date))
-                        last_update = None
-                        for tags in sub_tags_list:
-                            if 'SPOTY_TRACK_ADDED' in tags:
-                                track_added = datetime.strptime(tags['SPOTY_TRACK_ADDED'], "%Y-%m-%d %H:%M:%S")
-                            if last_update == None or last_update < track_added:
-                                last_update = track_added
-
-                        if last_update < specified_date:
-                            days = (datetime.today() - last_update).days
-                            if days < 10000:  # some tracks have 1970 year added!
-                                click.echo(
-                                    f'\n"{sub_playlist["name"]}" ({sub_playlist["id"]}) playlist not updated {days} days.')
-                                if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
-                                    unsubscribe([sub_playlist['id']], False, True, False, user_playlists)
-                                    all_unsubscribed.append(sub_playlist['id'])
-                                    removed = True
-
-    return subs, all_not_listened_subs, subs_by_fav_percentage, all_unsubscribed, all_ignored
+    return info

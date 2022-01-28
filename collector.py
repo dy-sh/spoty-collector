@@ -390,6 +390,25 @@ Sort mirrors in the mirrors file.
     col.sort_mirrors()
 
 
+@collector.command("find-in-mirrors-log")
+@click.argument("track_id")
+def find_in_mirrors_log(track_id):
+    """
+Specify the track ID and find out to which mirrors it was added from which subscribed playlists.
+    """
+    track_id = spotify_api.parse_track_id(track_id)
+
+    records = col.find_in_mirrors_log(track_id)
+    if len(records) == 0:
+        click.echo(f'Track {track_id} not found in the log.')
+        exit()
+
+    click.echo(f'Track {track_id} was added (subscribed playlist id : mirror playlist id):')
+    for rec in records:
+        click.echo(f'{rec[2]} : {rec[0]}')
+
+
+
 @collector.command("reduce")
 @click.option('--dont-check-update-date', '-D', is_flag=True,
               help='Do not check last updated date of subscribed playlist.')
@@ -414,41 +433,23 @@ When you run this function, all mirrors will be checked for how many tracks you 
 Next, you will be asked to unsubscribe from playlists that you have listened to but have added too few tracks to your favorites.
 This will allow you to subscribe to only those playlists that contain enough good (in your opinion) tracks.
     """
-    subs, all_not_listened_subs, subs_by_fav_percentage, all_unsubscribed, all_ignored \
+    infos, all_not_listened, all_unsubscribed, all_ignored \
         = col.reduce_mirrors(not dont_check_update_date, not dont_read_log, not dont_unsubscribe, confirm)
 
     click.echo("------------------------------------------")
     click.echo("Subscriptions by favorite percentage:")
     click.echo("FAV.PERCENTAGE : LISTENED_COUNT / TRACKS_COUNT : PLAYLIST_ID : PLAYLIST_NAME")
 
-    fav_subs = sorted(subs_by_fav_percentage, key=lambda x: x['fav_percentage'])
+    fav_subs = sorted(infos, key=lambda x: x.fav_percentage)
     for s in fav_subs:
         click.echo(
-            f'{s["fav_percentage"]:.1f} : {s["listened_count"]} / {s["tracks_count"]} : {s["playlist"]["id"]} : {s["playlist"]["name"]}')
+            f'{s.fav_percentage:.1f} : {len(s.listened_tracks)} / {len(s.tracks)} : {s.playlist["id"]} : {s.playlist["name"]}')
 
     click.echo("------------------------------------------")
-    click.echo(f'{len(subs)} subscribed playlists total.')
+    click.echo(f'{len(infos)} subscribed playlists total.')
     if len(all_ignored) > 0:
         click.echo(f'{len(all_ignored)} playlists skipped due to ignore settings.')
-    if len(all_not_listened_subs) > 0:
-        click.echo(f'{len(all_not_listened_subs)} playlists skipped due to too few tracks listened.')
+    if len(all_not_listened) > 0:
+        click.echo(f'{len(all_ignored)} playlists skipped due to too few tracks listened.')
     if len(all_unsubscribed) > 0:
         click.echo(f'{len(all_unsubscribed)} playlists unsubscribed.')
-
-
-@collector.command("find-in-mirrors-log")
-@click.argument("track_id")
-def find_in_mirrors_log(track_id):
-    """
-Specify the track ID and find out to which mirrors it was added from which subscribed playlists.
-    """
-    track_id = spotify_api.parse_track_id(track_id)
-
-    records = col.find_in_mirrors_log(track_id)
-    if len(records) == 0:
-        click.echo(f'Track {track_id} not found in the log.')
-        exit()
-
-    click.echo(f'Track {track_id} was added (subscribed playlist id : mirror playlist id):')
-    for rec in records:
-        click.echo(f'{rec[2]} : {rec[0]}')
