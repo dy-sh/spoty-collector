@@ -498,7 +498,7 @@ PLAYLIST_ID - ID or URI of playlist.
     """
     playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
-    info = col.get_subscriptions_info(playlist_id, not dont_read_log)
+    info = col.get_subscriptions_info([playlist_id], not dont_read_log)
 
     days = (datetime.today() - info.last_update).days
 
