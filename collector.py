@@ -601,10 +601,12 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
               help='Include already subscribed playlists.')
 @click.option('--include-listened', '-l', is_flag=True,
               help='Include playlists that are fully listened to.')
+@click.option('--min-listened', '--ml', type=int, default=15, show_default=True,
+              help='Skip the playlist if the number of listened tracks is less than the given value.')
 @click.option('--limit', type=int, default=10, show_default=True,
               help='Limit the number of playlists found.')
 @click.argument("search_query")
-def find_best_playlist(search_query, include_subscribed, include_listened, limit):
+def find_best_playlist(search_query, include_subscribed, include_listened, limit, min_listened):
     """
 Find best public playlist by specified search query.
     """
@@ -612,6 +614,7 @@ Find best public playlist by specified search query.
     subs = col.get_subscribed_playlist_ids(mirrors)
 
     playlists = spotify_api.find_playlist_by_query(search_query, limit)
+
     new_playlists = []
     for playlist in playlists:
         if not include_subscribed:
@@ -629,6 +632,9 @@ Find best public playlist by specified search query.
 
     if not include_listened:
         infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
+
+    if min_listened > 0:
+        infos = (x for x in infos if len(x.listened_tracks) > min_listened)
 
     infos = sorted(infos, key=lambda x: x.fav_percentage)
 
