@@ -603,7 +603,7 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
               help='Include playlists that are fully listened to.')
 @click.option('--min-listened', '--ml', type=int, default=15, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
-@click.option('--limit', type=int, default=10, show_default=True,
+@click.option('--limit', type=int, default=100, show_default=True,
               help='Limit the number of playlists found.')
 @click.argument("search_query")
 def find_best_playlist(search_query, include_subscribed, include_listened, limit, min_listened):
