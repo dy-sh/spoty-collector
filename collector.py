@@ -149,7 +149,7 @@ MIRROR_NAMES - names of mirror playlists.
               help='Mirror group name (all if not specified).')
 @click.option('--fast', '-f', is_flag=True,
               help='Do not request playlist names (fast).')
-def list_mirrors(fast,mirror_group):
+def list_mirrors(fast, mirror_group):
     """
 Display a list of mirrors and subscribed playlists.
     """
@@ -444,9 +444,11 @@ Specify the track ID and find out to which mirrors it was added from which subsc
               help='Do not read mirrors history from log file (use current playlists state only).')
 @click.option('--dont-unsubscribe', '-U', is_flag=True,
               help='Do not unsubscribe (list only).')
+@click.option('--mirror-group', '--g',
+              help='Mirror group name (all if not specified).')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask any questions.')
-def reduce_mirrors(dont_check_update_date, dont_read_log, dont_unsubscribe, confirm):
+def reduce_mirrors(dont_check_update_date, dont_read_log, dont_unsubscribe, mirror_group, confirm):
     """
 Remove playlists from subscriptions that contain few good tracks.
 
@@ -462,7 +464,7 @@ Next, you will be asked to unsubscribe from playlists that you have listened to 
 This will allow you to subscribe to only those playlists that contain enough good (in your opinion) tracks.
     """
     infos, all_not_listened, all_unsubscribed, all_ignored \
-        = col.reduce_mirrors(not dont_check_update_date, not dont_read_log, not dont_unsubscribe, confirm)
+        = col.reduce_mirrors(not dont_check_update_date, not dont_read_log, not dont_unsubscribe, mirror_group, confirm)
 
     click.echo("\n------------------------------------------")
     click.echo("Subscriptions by favorite percentage:")
@@ -479,7 +481,7 @@ This will allow you to subscribe to only those playlists that contain enough goo
     if len(all_ignored) > 0:
         click.echo(f'{len(all_ignored)} playlists skipped due to ignore settings.')
     if len(all_not_listened) > 0:
-        click.echo(f'{len(all_ignored)} playlists skipped due to too few tracks listened.')
+        click.echo(f'{len(all_not_listened)} playlists skipped due to too few tracks listened.')
     if len(all_unsubscribed) > 0:
         click.echo(f'{len(all_unsubscribed)} playlists unsubscribed.')
 
@@ -529,7 +531,7 @@ PLAYLIST_ID - mirror playlist ID or URI.
     data = col.get_user_library(not dont_read_log)
     infos = []
 
-    with click.progressbar(subs, label=f'Collecting info for {len(subs)} subscribed playlists') as bar:
+    with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
         for id in bar:
             info = col.__get_subscription_info(id, data)
             infos.append(info)
@@ -555,7 +557,7 @@ MIRROR_NAME - mirror name.
     data = col.get_user_library(not dont_read_log)
     infos = []
 
-    with click.progressbar(subs, label=f'Collecting info for {len(subs)} subscribed playlists') as bar:
+    with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
         for id in bar:
             info = col.__get_subscription_info(id, data)
             infos.append(info)
@@ -566,11 +568,13 @@ MIRROR_NAME - mirror name.
 @collector.command("info-all")
 @click.option('--dont-read-log', '-L', is_flag=True,
               help='Do not read mirrors history from log file (use current playlists state only).')
-def info_all_mirrors(dont_read_log):
+@click.option('--mirror-group', '--g',
+              help='Mirror group name (all if not specified).')
+def info_all_mirrors(dont_read_log, mirror_group):
     """
 Print info all mirrors.
     """
-    infos = col.get_all_subscriptions_info(not dont_read_log)
+    infos = col.get_all_subscriptions_info(not dont_read_log, mirror_group)
 
     print_mirror_infos(infos)
 
@@ -634,7 +638,9 @@ Find best public playlist by specified search query.
             info = col.__get_subscription_info(playlist['id'], data)
             infos.append(info)
 
-    infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
+    if not include_listened:
+        infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
+
     infos = sorted(infos, key=lambda x: x.fav_percentage)
 
     print_mirror_infos(infos)

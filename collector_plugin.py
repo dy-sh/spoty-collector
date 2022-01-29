@@ -727,14 +727,15 @@ def find_in_mirrors_log(track_id):
     return records
 
 
-def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, confirm=False):
+def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, mirror_group: str = None, confirm=False):
     all_unsubscribed = []
     all_not_listened = []
     all_ignored = []
 
-    infos = get_all_subscriptions_info(read_log)
+    infos = get_all_subscriptions_info(read_log, mirror_group)
     user_playlists = spotify_api.get_list_of_playlists()
 
+    res_infos = []
     for info in infos:
         if info.playlist["id"] in REDUCE_IGNORE_PLAYLISTS:
             all_ignored.append(info.playlist["id"])
@@ -743,6 +744,8 @@ def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, confirm=Fa
         if len(info.listened_tracks) == 0 or len(info.listened_tracks) < REDUCE_MINIMUM_LISTENED_TRACKS:
             all_not_listened.append(info.playlist)
             continue
+
+        res_infos.append(info)
 
         if unsub:
             removed = False
@@ -769,15 +772,15 @@ def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, confirm=Fa
                                 all_unsubscribed.append(info.playlist['id'])
                                 removed = True
 
-    return infos, all_not_listened, all_unsubscribed, all_ignored
+    return res_infos, all_not_listened, all_unsubscribed, all_ignored
 
 
-def get_all_subscriptions_info(read_log=True) -> List[SubscriptionInfo]:
-    data = get_user_library(read_log)
+def get_all_subscriptions_info(read_log=True, mirror_group: str = None) -> List[SubscriptionInfo]:
+    data = get_user_library(read_log, mirror_group)
     infos = []
 
     with click.progressbar(data.subscribed_playlist_ids,
-                           label=f'Collecting info for {len(data.mirrors)} mirrors ({len(data.subscribed_playlist_ids)} subscribed playlists)') as bar:
+                           label=f'Collecting info for {len(data.mirrors)} playlists)') as bar:
         for sub_playlist_id in bar:
             info = __get_subscription_info(sub_playlist_id, data)
             infos.append(info)
@@ -796,10 +799,10 @@ def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> Subscr
     return infos
 
 
-def get_user_library(read_log=True) -> UserLibrary:
+def get_user_library(read_log=True, mirror_group: str = None) -> UserLibrary:
     lib = UserLibrary()
 
-    lib.mirrors = read_mirrors()
+    lib.mirrors = read_mirrors(mirror_group)
 
     if len(lib.mirrors) == 0:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
