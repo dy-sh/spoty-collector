@@ -788,7 +788,7 @@ def get_all_subscriptions_info(read_log=True, mirror_group: str = None) -> List[
     return infos
 
 
-def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> SubscriptionInfo:
+def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> List[SubscriptionInfo]:
     data = get_user_library(read_log)
     infos = []
 

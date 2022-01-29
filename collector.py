@@ -498,19 +498,8 @@ PLAYLIST_ID - ID or URI of playlist.
     """
     playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
-    info = col.get_subscriptions_info([playlist_id], not dont_read_log)
-
-    days = (datetime.today() - info.last_update).days
-
-    click.echo("------------------------------------------")
-    click.echo(f'Playlist: "{info.playlist["name"]}" ({info.playlist["id"]})')
-    click.echo(f'Tracks total: {len(info.tracks)}')
-    click.echo(f'Tracks listened: {len(info.listened_tracks)}')
-    click.echo(f'Favorite tracks: {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
-    if days < 10000:
-        click.echo(f'Last update: {info.last_update} ({days} days ago)')
-    else:
-        click.echo(f'Last update: Unknown')
+    infos = col.get_subscriptions_info([playlist_id], not dont_read_log)
+    print_mirror_infos(infos)
 
 
 @collector.command("info-mirror")
