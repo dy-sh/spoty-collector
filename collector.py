@@ -414,7 +414,7 @@ Unlike all listened tracks.
 @collector.command("sort-mirrors-list")
 def sort_mirrors():
     """
-Sort mirrors in the mirrors file.
+Sort mirrors in the mirrors file and check for subscribed playlist id duplicates.
     """
     col.sort_mirrors()
 
@@ -603,8 +603,8 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
               help='Include playlists that are fully listened to.')
 @click.option('--min-listened', '--ml', type=int, default=15, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
-@click.option('--limit', type=int, default=100, show_default=True,
-              help='Limit the number of playlists found.')
+@click.option('--limit', type=int, default=1000, show_default=True,
+              help='Limit the number of processed playlists (max 1000 due to spotify api limit).')
 @click.argument("search_query")
 def find_best_playlist(search_query, include_subscribed, include_listened, limit, min_listened):
     """

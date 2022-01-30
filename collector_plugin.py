@@ -692,6 +692,13 @@ def sort_mirrors():
     mirrors = sorted(mirrors, key=lambda x: x.group + x.mirror_name)
     write_mirrors(mirrors)
 
+    playlist_ids = []
+    for m in mirrors:
+        if m.playlist_id in playlist_ids:
+            click.echo(f'Playlist {m.playlist_id} subscribed twice!', err=True)
+        else:
+            playlist_ids.append(m.playlist_id)
+
 
 def write_mirrors_log(mirror_playlist_id, tags_list):
     with open(mirrors_log_file_name, 'a', encoding='utf-8-sig') as file:
