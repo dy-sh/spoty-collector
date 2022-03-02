@@ -523,7 +523,8 @@ PLAYLIST_ID - mirror playlist ID or URI.
     with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
         for id in bar:
             info = col.__get_subscription_info(id, data)
-            infos.append(info)
+            if info is not None:
+                infos.append(info)
 
     print_mirror_infos(infos)
 
@@ -549,7 +550,8 @@ MIRROR_NAME - mirror name.
     with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
         for id in bar:
             info = col.__get_subscription_info(id, data)
-            infos.append(info)
+            if info is not None:
+                infos.append(info)
 
     print_mirror_infos(infos)
 
@@ -628,7 +630,8 @@ Find best public playlist by specified search query.
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:
             info = col.__get_subscription_info(playlist['id'], data)
-            infos.append(info)
+            if info is not None:
+                infos.append(info)
 
     if not include_listened:
         infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))

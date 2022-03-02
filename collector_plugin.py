@@ -292,14 +292,15 @@ def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, remove_tracks_from
 
                             elif remove_tracks_from_mirror:
                                 sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
-                                sub_tracks = sub_playlist["tracks"]["items"]
-                                # sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
-                                track_ids = spotify_api.get_track_ids(sub_tracks)
-                                if confirm or click.confirm(
-                                        f'Do you want to delete {len(track_ids)} tracks from mirror playlist "{m.mirror_name}" ({mirror_playlist_id}) ?'):
-                                    spotify_api.remove_tracks_from_playlist(mirror_playlist_id, track_ids)
-                                click.echo(
-                                    f'\n{len(track_ids)} tracks removed from mirror playlist "{m.mirror_name}" ({mirror_playlist_id})')
+                                if sub_playlist is not None:
+                                    sub_tracks = sub_playlist["tracks"]["items"]
+                                    # sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+                                    track_ids = spotify_api.get_track_ids(sub_tracks)
+                                    if confirm or click.confirm(
+                                            f'Do you want to delete {len(track_ids)} tracks from mirror playlist "{m.mirror_name}" ({mirror_playlist_id}) ?'):
+                                        spotify_api.remove_tracks_from_playlist(mirror_playlist_id, track_ids)
+                                    click.echo(
+                                        f'\n{len(track_ids)} tracks removed from mirror playlist "{m.mirror_name}" ({mirror_playlist_id})')
 
     for sub_playlist_id in sub_playlist_ids:
         sub_playlist_id = spotify_api.parse_playlist_id(sub_playlist_id)
@@ -446,10 +447,11 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
                 new_tracks = []
                 for sub_id in sub_playlists_ids:
                     sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_id)
-                    sub_tracks = sub_playlist["tracks"]["items"]
-                    sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
-                    new_tracks.extend(sub_tags_list)
-                    all_sub_tracks.extend(sub_tags_list)
+                    if sub_playlist is not None:
+                        sub_tracks = sub_playlist["tracks"]["items"]
+                        sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+                        new_tracks.extend(sub_tags_list)
+                        all_sub_tracks.extend(sub_tags_list)
                     bar.update(1)
 
                 # remove duplicates
@@ -518,6 +520,8 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
 def clean_mirror(mirror_playlist_id, remove_empty_mirror=True, confirm=False):
     # get tracks from mirror
     mirror_playlist = spotify_api.get_playlist_with_full_list_of_tracks(mirror_playlist_id)
+    if mirror_playlist is None:
+        return [], []
     mirror_name = mirror_playlist['name']
     mirror_tracks = mirror_playlist["tracks"]["items"]
     mirror_tags_list = spotify_api.read_tags_from_spotify_tracks(mirror_tracks)
@@ -801,7 +805,8 @@ def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> List[S
 
     for id in sub_playlist_ids:
         info = __get_subscription_info(id, data)
-        infos.append(info)
+        if info is not None:
+            infos.append(info)
 
     return infos
 
@@ -874,6 +879,8 @@ def get_user_library(read_log=True, mirror_group: str = None) -> UserLibrary:
 def __get_subscription_info(sub_playlist_id: str, data: UserLibrary) -> SubscriptionInfo:
     # get all tracks from subscribed playlists
     sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
+    if sub_playlist is None:
+        return None
     sub_tracks = sub_playlist["tracks"]["items"]
     sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
 
