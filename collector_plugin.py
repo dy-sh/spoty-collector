@@ -33,9 +33,12 @@ if mirrors_file_name.startswith("./") or mirrors_file_name.startswith(".\\"):
 if mirrors_log_file_name.startswith("./") or mirrors_log_file_name.startswith(".\\"):
     mirrors_log_file_name = os.path.join(current_directory, mirrors_log_file_name)
 
+cache_dir = os.path.join(current_directory, 'cache')
+
 listened_file_name = os.path.abspath(listened_file_name)
 mirrors_file_name = os.path.abspath(mirrors_file_name)
 mirrors_log_file_name = os.path.abspath(mirrors_log_file_name)
+cache_dir = os.path.abspath(cache_dir)
 
 LISTENED_LIST_TAGS = [
     'SPOTY_LENGTH',
@@ -955,3 +958,83 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary) -> Subscrip
             info.mirror_name = m.mirror_name
 
     return info
+
+
+def cache_by_name(search_query, limit):
+    cached_ids = []
+    cached_files = []
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    for full_name in csvs_in_path:
+        base_name = os.path.basename(full_name)
+        ext = os.path.splitext(base_name)[1]
+        base_name = os.path.splitext(base_name)[0]
+        dir_name = os.path.dirname(full_name)
+        playlist_id = str.split(base_name, ' - ')[0]
+        cached_ids.append(playlist_id)
+        cached_files.append(full_name)
+
+    playlists = spotify_api.find_playlist_by_query(search_query, limit)
+
+    new_playlists = []
+    for playlist in playlists:
+        if playlist['id'] in cached_ids:
+            continue
+        new_playlists.append(playlist)
+
+    with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
+        for playlist in bar:
+            pl = spotify_api.get_playlist_with_full_list_of_tracks(playlist['id'])
+            if pl is None:
+                return None
+            tracks = pl["tracks"]["items"]
+            tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+            file_name = playlist['id'] + " - " + playlist['name'] + '.csv'
+            file_name = utils.slugify_file_pah(file_name)
+            cache_file_name = os.path.join(cache_dir, file_name)
+            csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
+
+    return cached_ids, new_playlists
+
+
+def cache_by_name(search_query, limit):
+    playlists = spotify_api.find_playlist_by_query(search_query, limit)
+    ids = []
+    for playlist in playlists:
+        ids.append(playlist['id'])
+
+    old, new = cache_by_ids(ids)
+    return old, new
+
+
+def cache_by_ids(playlist_ids):
+    cached_ids = []
+    cached_files = []
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    for full_name in csvs_in_path:
+        base_name = os.path.basename(full_name)
+        ext = os.path.splitext(base_name)[1]
+        base_name = os.path.splitext(base_name)[0]
+        dir_name = os.path.dirname(full_name)
+        playlist_id = str.split(base_name, ' - ')[0]
+        cached_ids.append(playlist_id)
+        cached_files.append(full_name)
+
+    new_playlists = []
+    for playlist_id in playlist_ids:
+        if playlist_id in cached_ids:
+            continue
+        new_playlists.append(playlist_id)
+
+    with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
+        for playlist_id in bar:
+            playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
+            if playlist is None:
+                return None
+            tracks = playlist["tracks"]["items"]
+            tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+            file_name = playlist['id'] + " - " + playlist['name'] + '.csv'
+            file_name = utils.slugify_file_pah(file_name)
+            cache_file_name = os.path.join(cache_dir, file_name)
+            csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
+
+    return cached_ids, new_playlists

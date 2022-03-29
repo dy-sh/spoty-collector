@@ -2,9 +2,11 @@ import spoty.plugins.collector.collector_plugin as col
 from spoty.plugins.collector.collector_plugin import SubscriptionInfo
 import spoty.utils
 from spoty import spotify_api
+from spoty import csv_playlist
 from spoty.commands.spotify_like_commands import like_import
 import click
 import re
+import os.path
 from datetime import datetime, timedelta
 from typing import List
 
@@ -642,3 +644,34 @@ Find best public playlist by specified search query.
     infos = sorted(infos, key=lambda x: x.fav_percentage)
 
     print_mirror_infos(infos)
+
+
+@collector.command("cache-by-name")
+@click.option('--limit', type=int, default=1000, show_default=True,
+              help='Limit the number of processed playlists (max 1000 due to spotify api limit).')
+@click.argument("search_query")
+def cache_by_name(search_query, limit):
+    """
+Find public playlists by specified search query and cache them (save to csv files on disk).
+    """
+
+    old, new = col.cache_by_name(search_query, limit)
+
+    click.echo("\n======================================================================\n")
+    click.echo(f'Already cached playlists: {len(old)}')
+    click.echo(f'New cached playlists: {len(new)}')
+
+
+@collector.command("cache-by-id")
+@click.argument("playlist_ids", nargs=-1)
+def cache_by_ids(playlist_ids):
+    """
+Cache playlist with specified id (save to csv files on disk).
+    """
+
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+    old, new = col.cache_by_ids(playlist_ids)
+
+    click.echo("\n======================================================================\n")
+    click.echo(f'Already cached playlists: {len(old)}')
+    click.echo(f'New cached playlists: {len(new)}')
