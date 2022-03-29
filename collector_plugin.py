@@ -879,13 +879,19 @@ def get_user_library(read_log=True, mirror_group: str = None) -> UserLibrary:
     return lib
 
 
-def __get_subscription_info(sub_playlist_id: str, data: UserLibrary) -> SubscriptionInfo:
+
+def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=None) -> SubscriptionInfo:
     # get all tracks from subscribed playlists
-    sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
-    if sub_playlist is None:
-        return None
-    sub_tracks = sub_playlist["tracks"]["items"]
-    sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+    if playlist is None:
+        sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
+        if sub_playlist is None:
+            return None
+
+        sub_tracks = sub_playlist["tracks"]["items"]
+        sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+    else:
+        sub_playlist = playlist
+        sub_tags_list=playlist['tracks']
 
     # get listened tracks
     not_listened_tracks, listened_tracks = get_not_listened_tracks(sub_tags_list)
@@ -1002,3 +1008,20 @@ def cache_by_ids(playlist_ids):
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
 
     return cached_ids, new_playlists
+
+
+def get_cached_playlists():
+    playlists = []
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    for file_name in csvs_in_path:
+        base_name = os.path.basename(file_name)
+        base_name = os.path.splitext(base_name)[0]
+        playlist_id = str.split(base_name, ' - ')[0]
+        playlist_name = str.split(base_name, ' - ')[1]
+        tags = csv_playlist.read_tags_from_csv(file_name)
+        pl = {}
+        pl['id'] = playlist_id
+        pl['name'] = playlist_name
+        pl['tracks'] = tags
+        playlists.append(pl)
+    return playlists
