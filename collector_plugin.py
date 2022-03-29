@@ -961,42 +961,6 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary) -> Subscrip
 
 
 def cache_by_name(search_query, limit):
-    cached_ids = []
-    cached_files = []
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
-    for full_name in csvs_in_path:
-        base_name = os.path.basename(full_name)
-        ext = os.path.splitext(base_name)[1]
-        base_name = os.path.splitext(base_name)[0]
-        dir_name = os.path.dirname(full_name)
-        playlist_id = str.split(base_name, ' - ')[0]
-        cached_ids.append(playlist_id)
-        cached_files.append(full_name)
-
-    playlists = spotify_api.find_playlist_by_query(search_query, limit)
-
-    new_playlists = []
-    for playlist in playlists:
-        if playlist['id'] in cached_ids:
-            continue
-        new_playlists.append(playlist)
-
-    with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
-        for playlist in bar:
-            pl = spotify_api.get_playlist_with_full_list_of_tracks(playlist['id'])
-            if pl is None:
-                return None
-            tracks = pl["tracks"]["items"]
-            tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
-            file_name = playlist['id'] + " - " + playlist['name'] + '.csv'
-            file_name = utils.slugify_file_pah(file_name)
-            cache_file_name = os.path.join(cache_dir, file_name)
-            csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
-
-    return cached_ids, new_playlists
-
-
-def cache_by_name(search_query, limit):
     playlists = spotify_api.find_playlist_by_query(search_query, limit)
     ids = []
     for playlist in playlists:
