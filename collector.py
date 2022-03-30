@@ -687,7 +687,7 @@ Cache playlist with specified id (save to csv files on disk).
 @click.option('--limit', type=int, default=100, show_default=True,
               help='Limit the number of processed playlists.')
 @click.option('--filter-names', '--fn',
-              help='Get only playlists whose names matches this regex filter')
+              help='Get only playlists from user library whose names matches this regex filter')
 def cache_find_best(filter_names, include_subscribed, include_listened, limit, min_listened):
     """
 Find best from cached playlists.
@@ -709,7 +709,7 @@ Find best from cached playlists.
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:
-            info = col.__get_subscription_info(playlist['id'], data, filter_names, playlist)
+            info = col.__get_subscription_info(playlist['id'], data, playlist)
             if info is not None:
                 infos.append(info)
 

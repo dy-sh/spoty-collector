@@ -814,7 +814,7 @@ def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> List[S
     return infos
 
 
-def get_user_library(read_log=True, mirror_group: str = None,filter_names=None) -> UserLibrary:
+def get_user_library(read_log=True, mirror_group: str = None, filter_names=None) -> UserLibrary:
     lib = UserLibrary()
 
     lib.mirrors = read_mirrors(mirror_group)
@@ -886,8 +886,8 @@ def get_user_library(read_log=True, mirror_group: str = None,filter_names=None) 
     return lib
 
 
-
-def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, filter_names=None, playlist=None) -> SubscriptionInfo:
+def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=None,
+                            check_likes=False) -> SubscriptionInfo:
     # get all tracks from subscribed playlists
     if playlist is None:
         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
@@ -898,16 +898,17 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, filter_name
         sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
     else:
         sub_playlist = playlist
-        sub_tags_list=playlist['tracks']
+        sub_tags_list = playlist['tracks']
 
     # get listened tracks
     not_listened_tracks, listened_tracks = get_not_listened_tracks(sub_tags_list)
 
     # get liked tracks
-    liked, not_liked = spotify_api.get_liked_tags_list(not_listened_tracks)
-
     listened_or_liked = listened_tracks.copy()
-    listened_or_liked.extend(liked)
+
+    if check_likes:
+        liked, not_liked = spotify_api.get_liked_tags_list(not_listened_tracks)
+        listened_or_liked.extend(liked)
 
     if data.log is not None:
         if sub_playlist_id in data.log:
