@@ -658,11 +658,13 @@ def cache_by_name(search_query, limit):
 Find public playlists by specified search query and cache them (save to csv files on disk).
     """
 
-    old, new = col.cache_by_name(search_query, limit)
+    new, old, all_old = col.cache_by_name(search_query, limit)
 
     click.echo("\n======================================================================\n")
-    click.echo(f'Already cached playlists: {len(old)}')
     click.echo(f'New cached playlists: {len(new)}')
+    click.echo(f'Skipped already cached playlists: {len(old)}')
+    click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
+
 
 
 @collector.command("cache-by-id")
@@ -673,11 +675,12 @@ Cache playlist with specified id (save to csv files on disk).
     """
 
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    old, new = col.cache_by_ids(playlist_ids)
+    new, old, all_old = col.cache_by_ids(playlist_ids)
 
     click.echo("\n======================================================================\n")
-    click.echo(f'Already cached playlists: {len(old)}')
     click.echo(f'New cached playlists: {len(new)}')
+    click.echo(f'Skipped already cached playlists: {len(old)}')
+    click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
 
 
 @collector.command("cache-find-best")

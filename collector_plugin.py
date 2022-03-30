@@ -980,8 +980,8 @@ def cache_by_name(search_query, limit):
     for playlist in playlists:
         ids.append(playlist['id'])
 
-    old, new = cache_by_ids(ids)
-    return old, new
+    new, old, all_old = cache_by_ids(ids)
+    return new, old, all_old
 
 
 def cache_by_ids(playlist_ids):
@@ -998,8 +998,10 @@ def cache_by_ids(playlist_ids):
         cached_files.append(full_name)
 
     new_playlists = []
+    exist_playlists = []
     for playlist_id in playlist_ids:
         if playlist_id in cached_ids:
+            exist_playlists.append(playlist_id)
             continue
         new_playlists.append(playlist_id)
 
@@ -1017,7 +1019,7 @@ def cache_by_ids(playlist_ids):
             cache_file_name = os.path.join(cache_dir, file_name)
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
 
-    return cached_ids, new_playlists
+    return new_playlists, exist_playlists, cached_ids
 
 
 def get_cached_playlists():
