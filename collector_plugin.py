@@ -906,7 +906,7 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=No
     # get liked tracks
     listened_or_liked = listened_tracks.copy()
 
-    if check_likes:
+    if not check_likes:
         liked, not_liked = spotify_api.get_liked_tags_list(not_listened_tracks)
         listened_or_liked.extend(liked)
 

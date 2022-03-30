@@ -572,9 +572,12 @@ Print info all mirrors.
     print_mirror_infos(infos)
 
 
-def print_mirror_infos(infos: List[SubscriptionInfo]):
+def print_mirror_infos(infos: List[SubscriptionInfo], limit: int = None):
+    if limit is None:
+        limit = len(infos)
     for i, info in enumerate(infos):
-        print_mirror_info(info, i, len(infos))
+        if len(infos) - i - 1 < limit:
+            print_mirror_info(info, i, len(infos))
 
 
 def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = None):
@@ -688,7 +691,9 @@ Cache playlist with specified id (save to csv files on disk).
               help='Limit the number of processed playlists.')
 @click.option('--filter-names', '--fn',
               help='Get only playlists from user library whose names matches this regex filter')
-def cache_find_best(filter_names, include_subscribed, include_listened, limit, min_listened):
+@click.option('--check-likes', '-f', is_flag=True,
+              help='Check liked tracks, not only listened (more accurate, but slower).')
+def cache_find_best(filter_names, include_subscribed, include_listened, limit, min_listened, check_likes):
     """
 Find best from cached playlists.
     """
@@ -709,7 +714,7 @@ Find best from cached playlists.
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:
-            info = col.__get_subscription_info(playlist['id'], data, playlist)
+            info = col.__get_subscription_info(playlist['id'], data, playlist, check_likes)
             if info is not None:
                 infos.append(info)
 
@@ -721,4 +726,4 @@ Find best from cached playlists.
 
     infos = sorted(infos, key=lambda x: x.fav_percentage)
 
-    print_mirror_infos(infos)
+    print_mirror_infos(infos, limit)
