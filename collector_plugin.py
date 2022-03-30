@@ -814,7 +814,7 @@ def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> List[S
     return infos
 
 
-def get_user_library(read_log=True, mirror_group: str = None) -> UserLibrary:
+def get_user_library(read_log=True, mirror_group: str = None,filter_names=None) -> UserLibrary:
     lib = UserLibrary()
 
     lib.mirrors = read_mirrors(mirror_group)
@@ -848,16 +848,23 @@ def get_user_library(read_log=True, mirror_group: str = None) -> UserLibrary:
 
     lib.all_playlists = spotify_api.get_list_of_playlists()
 
-    if len(PLAYLISTS_WITH_FAVORITES) < 1:
-        click.echo('No favorites playlists specified. Edit "PLAYLISTS_WITH_FAVORITES" field in settings.toml file '
-                   'located in the collector plugin folder.')
-        exit()
-
     fav_playlists = []
-    for rule in PLAYLISTS_WITH_FAVORITES:
-        for playlist in lib.all_playlists:
-            if re.findall(rule, playlist['name']):
-                fav_playlists.append(playlist['id'])
+
+    if filter_names is None:
+        if len(PLAYLISTS_WITH_FAVORITES) < 1:
+            click.echo('No favorites playlists specified. Edit "PLAYLISTS_WITH_FAVORITES" field in settings.toml file '
+                       'located in the collector plugin folder.')
+            exit()
+
+        for rule in PLAYLISTS_WITH_FAVORITES:
+            for playlist in lib.all_playlists:
+                if re.findall(rule, playlist['name']):
+                    fav_playlists.append(playlist['id'])
+    else:
+        playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
+        click.echo(f'{len(playlists)}/{len(lib.all_playlists)} playlists matches the regex filter')
+        for playlist in playlists:
+            fav_playlists.append(playlist['id'])
 
     fav_tracks, fav_tags, fav_playlists = spotify_api.get_tracks_from_playlists(fav_playlists)
 
@@ -880,7 +887,7 @@ def get_user_library(read_log=True, mirror_group: str = None) -> UserLibrary:
 
 
 
-def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=None) -> SubscriptionInfo:
+def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, filter_names=None, playlist=None) -> SubscriptionInfo:
     # get all tracks from subscribed playlists
     if playlist is None:
         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)

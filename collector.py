@@ -686,7 +686,9 @@ Cache playlist with specified id (save to csv files on disk).
               help='Skip the playlist if the number of listened tracks is less than the given value.')
 @click.option('--limit', type=int, default=100, show_default=True,
               help='Limit the number of processed playlists.')
-def cache_find_best(include_subscribed, include_listened, limit, min_listened):
+@click.option('--filter-names', '--fn',
+              help='Get only playlists whose names matches this regex filter')
+def cache_find_best(filter_names, include_subscribed, include_listened, limit, min_listened):
     """
 Find best from cached playlists.
     """
@@ -702,12 +704,12 @@ Find best from cached playlists.
                 continue
         new_playlists.append(playlist)
 
-    data = col.get_user_library(True)
+    data = col.get_user_library(True, None, filter_names)
     infos = []
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:
-            info = col.__get_subscription_info(playlist['id'], data, playlist)
+            info = col.__get_subscription_info(playlist['id'], data, filter_names, playlist)
             if info is not None:
                 infos.append(info)
 
@@ -720,4 +722,3 @@ Find best from cached playlists.
     infos = sorted(infos, key=lambda x: x.fav_percentage)
 
     print_mirror_infos(infos)
-
