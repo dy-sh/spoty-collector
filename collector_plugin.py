@@ -1010,8 +1010,10 @@ def cache_by_ids(playlist_ids):
                 return None
             tracks = playlist["tracks"]["items"]
             tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
-            file_name = playlist['id'] + " - " + playlist['name'] + '.csv'
-            file_name = utils.slugify_file_pah(file_name)
+            file_name = playlist['id'] + " - " + playlist['name'] 
+            if len(file_name) > 120:
+                file_name = (file_name[:120] + '..')
+            file_name = utils.slugify_file_pah(file_name) + '.csv'
             cache_file_name = os.path.join(cache_dir, file_name)
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
 
