@@ -1009,7 +1009,7 @@ def cache_by_ids(playlist_ids):
         for playlist_id in bar:
             playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
             if playlist is None:
-                return None
+                continue
             tracks = playlist["tracks"]["items"]
             tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
             file_name = playlist['id'] + " - " + playlist['name'] 
