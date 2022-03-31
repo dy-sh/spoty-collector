@@ -1174,7 +1174,9 @@ def cache_find_best(filter_names, include_subscribed, include_listened, min_list
         infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
 
     if min_listened > 0:
-        infos = (x for x in infos if len(x.listened_tracks) > min_listened)
+        infos = (x for x in infos if len(x.listened_tracks) >= min_listened)
+
+    infos = (x for x in infos if x.fav_percentage > 0)
 
     infos = sorted(infos, key=lambda x: x.fav_percentage)
     return infos

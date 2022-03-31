@@ -643,7 +643,7 @@ Find best public playlist by specified search query.
         infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
 
     if min_listened > 0:
-        infos = (x for x in infos if len(x.listened_tracks) > min_listened)
+        infos = (x for x in infos if len(x.listened_tracks) >= min_listened)
 
     infos = sorted(infos, key=lambda x: x.fav_percentage)
 
@@ -688,7 +688,7 @@ Cache playlist with specified id (save to csv files on disk).
               help='Include already subscribed playlists.')
 @click.option('--include-listened', '-l', is_flag=True,
               help='Include playlists that are fully listened to.')
-@click.option('--min-listened', '--ml', type=int, default=15, show_default=True,
+@click.option('--min-listened', '--ml', type=int, default=10, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of processed playlists.')
