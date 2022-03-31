@@ -1088,7 +1088,7 @@ def read_csvs_thread(csvs_in_path, counter, result):
             playlist_name = str.split(base_name, ' - ')[1]
         except:
             playlist_name = "Unknown"
-        tags = csv_playlist.read_tags_from_csv(file_name)
+        tags = csv_playlist.read_tags_from_csv_fast(file_name,['ISRC', 'SPOTY_LENGTH','SPOTY_TRACK_ADDED'])
         pl = {}
         pl['id'] = playlist_id
         pl['name'] = playlist_name
