@@ -686,20 +686,20 @@ Cache playlist with specified id (save to csv files on disk).
 @collector.command("cache-find-best")
 @click.option('--include-subscribed', '-s', is_flag=True,
               help='Include already subscribed playlists.')
-@click.option('--include-listened', '-l', is_flag=True,
-              help='Include playlists that are fully listened to.')
 @click.option('--min-listened', '--ml', type=int, default=10, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
+@click.option('--min-not-listened', '--mnl', type=int, default=50, show_default=True,
+              help='Skip the playlist if the number of not listened tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of processed playlists.')
 @click.option('--filter-names', '--fn',
               help='Get only playlists from user library whose names matches this regex filter')
 @click.option('--check-likes', '-f', is_flag=True,
               help='Check liked tracks, not only listened (more accurate, but slower).')
-def cache_find_best(filter_names, include_subscribed, include_listened, limit, min_listened, check_likes):
+def cache_find_best(filter_names, include_subscribed, min_not_listened, limit, min_listened, check_likes):
     """
 Find best from cached playlists.
     """
 
-    infos = col.cache_find_best(filter_names, include_subscribed, include_listened, min_listened, check_likes)
+    infos = col.cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes)
     print_mirror_infos(infos, limit)

@@ -1106,7 +1106,7 @@ def read_csvs_thread(filenames, counter, result):
     result.put(res)
 
 
-def cache_find_best(filter_names, include_subscribed, include_listened, min_listened, check_likes):
+def cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes):
     mirrors = read_mirrors()
     subs = get_subscribed_playlist_ids(mirrors)
 
@@ -1170,8 +1170,8 @@ def cache_find_best(filter_names, include_subscribed, include_listened, min_list
         sys.exit()
 
 
-    if not include_listened:
-        infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
+    if min_not_listened > 0:
+        infos = (x for x in infos if len(x.tracks) - len(x.fav_tracks) >= min_not_listened)
 
     if min_listened > 0:
         infos = (x for x in infos if len(x.listened_tracks) >= min_listened)
