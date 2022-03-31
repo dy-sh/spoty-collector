@@ -714,7 +714,7 @@ Find best from cached playlists.
     data = col.get_user_library(True, None, filter_names)
     infos = []
 
-    all_listened_tracks = col.read_listened_tracks()
+    all_listened_tracks = col.read_listened_tracks(['ISRC','SPOTY_LENGTH'])
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:

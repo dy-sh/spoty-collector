@@ -15,6 +15,8 @@ import numpy as np
 import time
 import sys
 
+THREADS_COUNT = 12
+
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
 settings_file_name = os.path.join(current_directory, 'settings.toml')
@@ -169,11 +171,14 @@ def get_subs_by_mirror_name(mirror_name):
     return subs
 
 
-def read_listened_tracks():
+def read_listened_tracks(cells=None):
     if not os.path.isfile(listened_file_name):
         return []
 
-    tags_list = csv_playlist.read_tags_from_csv(listened_file_name, False, False)
+    if cells is None:
+        tags_list = csv_playlist.read_tags_from_csv(listened_file_name, False, False)
+    else:
+        tags_list = csv_playlist.read_tags_from_csv_fast(listened_file_name, cells)
     return tags_list
 
 
@@ -1027,9 +1032,6 @@ def cache_by_ids(playlist_ids):
     return new_playlists, exist_playlists, cached_ids
 
 
-THREADS_COUNT = 12
-
-
 def get_cached_playlists():
     playlists = []
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
@@ -1077,10 +1079,10 @@ def get_cached_playlists():
     return playlists
 
 
-def read_csvs_thread(csvs_in_path, counter, result):
+def read_csvs_thread(filenames, counter, result):
     res = []
 
-    for i, file_name in enumerate(csvs_in_path):
+    for i, file_name in enumerate(filenames):
         base_name = os.path.basename(file_name)
         base_name = os.path.splitext(base_name)[0]
         playlist_id = str.split(base_name, ' - ')[0]
@@ -1088,7 +1090,7 @@ def read_csvs_thread(csvs_in_path, counter, result):
             playlist_name = str.split(base_name, ' - ')[1]
         except:
             playlist_name = "Unknown"
-        tags = csv_playlist.read_tags_from_csv_fast(file_name,['ISRC', 'SPOTY_LENGTH','SPOTY_TRACK_ADDED'])
+        tags = csv_playlist.read_tags_from_csv_fast(file_name, ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED'])
         pl = {}
         pl['id'] = playlist_id
         pl['name'] = playlist_name
@@ -1097,6 +1099,6 @@ def read_csvs_thread(csvs_in_path, counter, result):
 
         if (i + 1) % 10 == 0:
             counter.value += 10
-        if i + 1 == len(csvs_in_path):
+        if i + 1 == len(filenames):
             counter.value += (i % 10) + 1
     result.put(res)
