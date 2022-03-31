@@ -690,7 +690,7 @@ Cache playlist with specified id (save to csv files on disk).
               help='Include playlists that are fully listened to.')
 @click.option('--min-listened', '--ml', type=int, default=15, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
-@click.option('--limit', type=int, default=100, show_default=True,
+@click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of processed playlists.')
 @click.option('--filter-names', '--fn',
               help='Get only playlists from user library whose names matches this regex filter')
