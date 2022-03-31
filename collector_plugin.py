@@ -220,16 +220,17 @@ def clean_listened():
     return good, duplicates
 
 
-def get_not_listened_tracks(tracks: list, show_progressbar=False, all_listened_tracks: list = None):
-    if all_listened_tracks is None:
-        all_listened_tracks = read_listened_tracks()
+def get_not_listened_tracks(tracks: list, show_progressbar=False, all_listened_tracks_dict: dict = None):
+    if all_listened_tracks_dict is None:
+        all_listened_tracks = read_listened_tracks(['ISRC', 'SPOTY_LENGTH'])
+        all_listened_tracks_dict = utils.tags_list_to_dict_by_isrc_and_length(all_listened_tracks)
 
     # listened_tracks = []
     # new_tags_list, listened = utils.remove_exist_tags(all_listened, new_tags_list, ['SPOTIFY_TRACK_ID'], False)
     # listened_tags_list.extend(listened)
 
-    new_tracks, listened_tracks = utils.remove_exist_tags_by_isrc_and_length(all_listened_tracks, tracks,
-                                                                             show_progressbar)
+    new_tracks, listened_tracks = utils.remove_exist_tags_by_isrc_and_length_dict(
+        all_listened_tracks_dict, tracks, show_progressbar)
     return new_tracks, listened_tracks
 
 
@@ -897,7 +898,7 @@ def get_user_library(read_log=True, mirror_group: str = None, filter_names=None)
 
 
 def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=None,
-                            check_likes=False, all_listened_tracks=None) -> SubscriptionInfo:
+                            check_likes=False, all_listened_tracks_dict=None) -> SubscriptionInfo:
     # get all tracks from subscribed playlists
     if playlist is None:
         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
@@ -911,7 +912,7 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=No
         sub_tags_list = playlist['tracks']
 
     # get listened tracks
-    not_listened_tracks, listened_tracks = get_not_listened_tracks(sub_tags_list, False, all_listened_tracks)
+    not_listened_tracks, listened_tracks = get_not_listened_tracks(sub_tags_list, False, all_listened_tracks_dict)
 
     # get liked tracks
     listened_or_liked = listened_tracks.copy()
@@ -1090,7 +1091,8 @@ def read_csvs_thread(filenames, counter, result):
             playlist_name = str.split(base_name, ' - ')[1]
         except:
             playlist_name = "Unknown"
-        tags = csv_playlist.read_tags_from_csv_fast(file_name, ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED'])
+        tags = csv_playlist.read_tags_from_csv_fast(file_name,
+                                                    ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED', 'SPOTIFY_TRACK_ID'])
         pl = {}
         pl['id'] = playlist_id
         pl['name'] = playlist_name

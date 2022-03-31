@@ -9,6 +9,7 @@ import re
 import os.path
 from datetime import datetime, timedelta
 from typing import List
+from spoty import utils
 
 
 @click.group("collector")
@@ -715,10 +716,11 @@ Find best from cached playlists.
     infos = []
 
     all_listened_tracks = col.read_listened_tracks(['ISRC','SPOTY_LENGTH'])
+    all_listened_tracks_dict = utils.tags_list_to_dict_by_isrc_and_length(all_listened_tracks)
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:
-            info = col.__get_subscription_info(playlist['id'], data, playlist, check_likes, all_listened_tracks)
+            info = col.__get_subscription_info(playlist['id'], data, playlist, check_likes, all_listened_tracks_dict)
             if info is not None:
                 infos.append(info)
 
