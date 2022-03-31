@@ -666,7 +666,6 @@ Find public playlists by specified search query and cache them (save to csv file
     click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
 
 
-
 @collector.command("cache-by-id")
 @click.argument("playlist_ids", nargs=-1)
 def cache_by_ids(playlist_ids):
@@ -715,9 +714,11 @@ Find best from cached playlists.
     data = col.get_user_library(True, None, filter_names)
     infos = []
 
+    all_listened_tracks = col.read_listened_tracks()
+
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:
-            info = col.__get_subscription_info(playlist['id'], data, playlist, check_likes)
+            info = col.__get_subscription_info(playlist['id'], data, playlist, check_likes, all_listened_tracks)
             if info is not None:
                 infos.append(info)
 
