@@ -700,36 +700,6 @@ def cache_find_best(filter_names, include_subscribed, include_listened, limit, m
     """
 Find best from cached playlists.
     """
-    mirrors = col.read_mirrors()
-    subs = col.get_subscribed_playlist_ids(mirrors)
 
-    playlists = col.get_cached_playlists()
-
-    new_playlists = []
-    for playlist in playlists:
-        if not include_subscribed:
-            if playlist['id'] in subs:
-                continue
-        new_playlists.append(playlist)
-
-    data = col.get_user_library(True, None, filter_names)
-    infos = []
-
-    all_listened_tracks = col.read_listened_tracks(['ISRC','SPOTY_LENGTH'])
-    all_listened_tracks_dict = utils.tags_list_to_dict_by_isrc_and_length(all_listened_tracks)
-
-    with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
-        for playlist in bar:
-            info = col.__get_subscription_info(playlist['id'], data, playlist, check_likes, all_listened_tracks_dict)
-            if info is not None:
-                infos.append(info)
-
-    if not include_listened:
-        infos = (x for x in infos if len(x.tracks) != len(x.fav_tracks))
-
-    if min_listened > 0:
-        infos = (x for x in infos if len(x.listened_tracks) > min_listened)
-
-    infos = sorted(infos, key=lambda x: x.fav_percentage)
-
+    infos = col.cache_find_best(filter_names, include_subscribed, include_listened, min_listened, check_likes)
     print_mirror_infos(infos, limit)
