@@ -10,6 +10,10 @@ import click
 import re
 from datetime import datetime, timedelta
 from typing import List
+from multiprocessing import Process, Lock, Queue, Value, Array
+import numpy as np
+import time
+import sys
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -1012,7 +1016,7 @@ def cache_by_ids(playlist_ids):
                 continue
             tracks = playlist["tracks"]["items"]
             tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
-            file_name = playlist['id'] + " - " + playlist['name'] 
+            file_name = playlist['id'] + " - " + playlist['name']
             if len(file_name) > 120:
                 file_name = (file_name[:120] + '..')
             file_name = utils.slugify_file_pah(file_name) + '.csv'
@@ -1022,18 +1026,76 @@ def cache_by_ids(playlist_ids):
     return new_playlists, exist_playlists, cached_ids
 
 
+THREADS_COUNT = 12
+
+
 def get_cached_playlists():
     playlists = []
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
-    for file_name in csvs_in_path:
+    # multi thread
+    try:
+        parts = np.array_split(csvs_in_path, THREADS_COUNT)
+        threads = []
+        counters = []
+        results = Queue()
+
+        with click.progressbar(length=len(csvs_in_path), label=f'Reading {len(csvs_in_path)} cached playlists') as bar:
+            # start threads
+            for i, part in enumerate(parts):
+                counter = Value('i', 0)
+                counters.append(counter)
+                csvs_in_path = list(part)
+                thread = Process(target=read_csvs_thread, args=(csvs_in_path, counter, results))
+                threads.append(thread)
+                thread.daemon = True  # This thread dies when main thread exits
+                thread.start()
+
+                # update bar
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # waiting for complete
+            while not bar.finished:
+                time.sleep(0.1)
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # combine results
+            for i in range(len(parts)):
+                res = results.get()
+                playlists.extend(res)
+
+    except (KeyboardInterrupt, SystemExit):  # aborted by user
+        click.echo()
+        click.echo('Aborted.')
+        sys.exit()
+    return playlists
+
+
+def read_csvs_thread(csvs_in_path, counter, result):
+    res = []
+
+    for i, file_name in enumerate(csvs_in_path):
         base_name = os.path.basename(file_name)
         base_name = os.path.splitext(base_name)[0]
         playlist_id = str.split(base_name, ' - ')[0]
-        playlist_name = str.split(base_name, ' - ')[1]
+        try:
+            playlist_name = str.split(base_name, ' - ')[1]
+        except:
+            playlist_name = "Unknown"
         tags = csv_playlist.read_tags_from_csv(file_name)
         pl = {}
         pl['id'] = playlist_id
         pl['name'] = playlist_name
         pl['tracks'] = tags
-        playlists.append(pl)
-    return playlists
+        res.append(pl)
+
+        if (i + 1) % 10 == 0:
+            counter.value += 10
+        if i + 1 == len(csvs_in_path):
+            counter.value += (i % 10) + 1
+    result.put(res)
