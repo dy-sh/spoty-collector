@@ -872,7 +872,11 @@ def get_user_library(read_log=True, mirror_group: str = None, filter_names=None)
                 if re.findall(rule, playlist['name']):
                     fav_playlists.append(playlist['id'])
     else:
-        playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
+        playlists = []
+        for pl in lib.all_playlists:
+            if pl['name'] == filter_names:
+                playlists.append(pl)
+        # playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
         click.echo(f'{len(playlists)}/{len(lib.all_playlists)} playlists matches the regex filter')
         for playlist in playlists:
             fav_playlists.append(playlist['id'])
