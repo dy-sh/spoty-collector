@@ -1121,7 +1121,7 @@ def cache_find_best(filter_names, include_subscribed, min_not_listened, min_list
                 continue
         new_playlists.append(playlist)
 
-    data = get_user_library(True, None, filter_names)
+    data = get_user_library(False, None, filter_names)
     infos = []
 
     all_listened_tracks = read_listened_tracks(['ISRC', 'SPOTY_LENGTH'])
