@@ -715,6 +715,8 @@ Cache playlist with specified id (save to csv files on disk).
               help='Skip the playlist if the number of not listened tracks is less than the given value.')
 @click.option('--min-fav-percentage', '--mfp', type=int, default=1, show_default=True,
               help='Skip the playlist if the number favourite percentage is less than the given value.')
+@click.option('--min-fav-tracks', '--mft', type=int, default=3, show_default=True,
+              help='Skip the playlist if the number favourite tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of printed best playlists.')
 @click.option('--filter-names', '--fn',
@@ -722,13 +724,13 @@ Cache playlist with specified id (save to csv files on disk).
 @click.option('--check-likes', '-f', is_flag=True,
               help='Check liked tracks, not only listened (more accurate, but slower).')
 def cache_find_best(filter_names, include_subscribed, min_not_listened, limit, min_listened, check_likes,
-                    min_fav_percentage):
+                    min_fav_percentage,min_fav_tracks):
     """
 Find best from cached playlists.
     """
 
     infos = col.cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes,
-                                min_fav_percentage)
+                                min_fav_percentage,min_fav_tracks)
     print_mirror_infos(infos, limit)
 
 
@@ -739,14 +741,16 @@ Find best from cached playlists.
               help='Skip the playlist if the number of not listened tracks is less than the given value.')
 @click.option('--min-fav-percentage', '--mfp', type=int, default=1, show_default=True,
               help='Skip the playlist if the number favourite percentage is less than the given value.')
+@click.option('--min-fav-tracks', '--mft', type=int, default=3, show_default=True,
+              help='Skip the playlist if the number favourite tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of printed best playlists.')
 @click.option('--filter-names', '--fn',
               help='Get only playlists from user library whose names matches this regex filter')
-def cache_find_best_fast(filter_names, min_not_listened, limit, min_listened, min_fav_percentage):
+def cache_find_best_fast(filter_names, min_not_listened, limit, min_listened, min_fav_percentage, min_fav_tracks):
     """
 Find best from cached playlists.
     """
 
-    infos = col.cache_find_best_fast(filter_names, min_not_listened, min_listened, min_fav_percentage)
+    infos = col.cache_find_best_fast(filter_names, min_not_listened, min_listened, min_fav_percentage, min_fav_tracks)
     print_mirror_infos_fast(infos, limit)

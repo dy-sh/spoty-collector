@@ -1126,7 +1126,7 @@ def read_csvs_thread(filenames, counter, result):
     result.put(res)
 
 
-def cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes, min_fav_percentage):
+def cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes, min_fav_percentage,min_fav_tracks):
     mirrors = read_mirrors()
     subs = get_subscribed_playlist_ids(mirrors)
 
@@ -1198,6 +1198,9 @@ def cache_find_best(filter_names, include_subscribed, min_not_listened, min_list
     if min_fav_percentage > 0:
         infos = (x for x in infos if x.fav_percentage >= min_fav_percentage)
 
+    if min_fav_tracks > 0:
+        infos = (x for x in infos if len(x.fav_tracks) >= min_fav_tracks)
+
     infos = (x for x in infos if x.fav_percentage > 0)
 
     infos = sorted(infos, key=lambda x: x.fav_percentage)
@@ -1219,7 +1222,7 @@ def __get_subscription_info_thread(playlists, data, check_likes, all_listened_tr
     result.put(res)
 
 
-def cache_find_best_fast(filter_names, min_not_listened, min_listened, min_fav_percentage):
+def cache_find_best_fast(filter_names, min_not_listened, min_listened, min_fav_percentage, min_fav_tracks):
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
 
     data = get_user_library_fast(filter_names)
@@ -1241,7 +1244,7 @@ def cache_find_best_fast(filter_names, min_not_listened, min_listened, min_fav_p
                 playlists_part = list(part)
                 thread = Process(target=__get_subscription_info_thread_fast,
                                  args=(playlists_part, data, data.listened_tracks, counter, results,
-                                       min_not_listened, min_listened, min_fav_percentage))
+                                       min_not_listened, min_listened, min_fav_percentage, min_fav_tracks))
                 threads.append(thread)
                 thread.daemon = True  # This thread dies when main thread exits
                 thread.start()
@@ -1275,7 +1278,7 @@ def cache_find_best_fast(filter_names, min_not_listened, min_listened, min_fav_p
 
 
 def __get_subscription_info_thread_fast(csv_filenames, data, all_listened_tracks_dict, counter, result,
-                                        min_not_listened, min_listened, min_fav_percentage):
+                                        min_not_listened, min_listened, min_fav_percentage,min_fav_tracks):
     res = []
 
     for i, file_name in enumerate(csv_filenames):
@@ -1294,10 +1297,11 @@ def __get_subscription_info_thread_fast(csv_filenames, data, all_listened_tracks
 
         info = __get_subscription_info_fast(data, playlist, all_listened_tracks_dict)
         if info is not None:
-            if min_not_listened == 0 or info.tracks - info.listened_tracks >= min_not_listened:
-                if min_listened == 0 or info.listened_tracks >= min_listened:
-                    if min_fav_percentage == 0 or info.fav_percentage >= min_fav_percentage:
-                        res.append(info)
+            if min_not_listened <= 0 or info.tracks - info.listened_tracks >= min_not_listened:
+                if min_listened <= 0 or info.listened_tracks >= min_listened:
+                    if min_fav_percentage <= 0 or info.fav_percentage >= min_fav_percentage:
+                        if min_fav_tracks <= 0 or info.fav_tracks >= min_fav_tracks:
+                            res.append(info)
 
         if (i + 1) % 100 == 0:
             counter.value += 100
