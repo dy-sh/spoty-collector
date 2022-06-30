@@ -15,7 +15,7 @@ import numpy as np
 import time
 import sys
 
-THREADS_COUNT = 2  # 12
+THREADS_COUNT = 12
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
