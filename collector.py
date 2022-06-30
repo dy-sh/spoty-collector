@@ -1,5 +1,5 @@
 import spoty.plugins.collector.collector_plugin as col
-from spoty.plugins.collector.collector_plugin import SubscriptionInfo
+from spoty.plugins.collector.collector_plugin import SubscriptionInfo, SubscriptionInfoFast
 import spoty.utils
 from spoty import spotify_api
 from spoty import csv_playlist
@@ -604,6 +604,31 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
         click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')
 
 
+
+
+def print_mirror_infos_fast(infos: List[SubscriptionInfoFast], limit: int = None):
+    if limit is None:
+        limit = len(infos)
+    for i, info in enumerate(infos):
+        if len(infos) - i - 1 < limit:
+            print_mirror_info_fast(info, i, len(infos))
+
+
+def print_mirror_info_fast(info: SubscriptionInfoFast, index: int = None, count: int = None):
+    if index is not None and count is not None:
+        click.echo(f"\n============================== {index + 1} / {count} ==============================\n")
+    else:
+        click.echo("\n======================================================================\n")
+
+    click.echo(f'Playlist        : "{info.playlist["name"]}" ({info.playlist["id"]})')
+    click.echo(f'Tracks total    : {info.tracks}')
+    click.echo(f'Tracks listened : {info.listened_tracks}')
+    click.echo(f'Favorite tracks : {info.fav_tracks} ({info.fav_percentage:.1f}%)')
+    click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
+    for i, pl_info in enumerate(info.fav_tracks_by_playlists):
+        click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')
+
+
 @collector.command("find-best")
 @click.option('--include-subscribed', '-s', is_flag=True,
               help='Include already subscribed playlists.')
@@ -703,3 +728,22 @@ Find best from cached playlists.
 
     infos = col.cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes)
     print_mirror_infos(infos, limit)
+
+
+
+@collector.command("cache-find-best-fast")
+@click.option('--min-listened', '--ml', type=int, default=10, show_default=True,
+              help='Skip the playlist if the number of listened tracks is less than the given value.')
+@click.option('--min-not-listened', '--mnl', type=int, default=50, show_default=True,
+              help='Skip the playlist if the number of not listened tracks is less than the given value.')
+@click.option('--limit', type=int, default=1000, show_default=True,
+              help='Limit the number of processed playlists.')
+@click.option('--filter-names', '--fn',
+              help='Get only playlists from user library whose names matches this regex filter')
+def cache_find_best_fast(filter_names, min_not_listened, limit, min_listened):
+    """
+Find best from cached playlists.
+    """
+
+    infos = col.cache_find_best_fast(filter_names, min_not_listened, min_listened)
+    print_mirror_infos_fast(infos, limit)

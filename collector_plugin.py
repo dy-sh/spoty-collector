@@ -15,7 +15,7 @@ import numpy as np
 import time
 import sys
 
-THREADS_COUNT = 12
+THREADS_COUNT = 2  # 12
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -87,6 +87,15 @@ class SubscriptionInfo:
     fav_tracks_by_playlists: List[FavPlaylistInfo]
     fav_percentage: float
     last_update: datetime
+
+
+class SubscriptionInfoFast:
+    playlist: dict
+    tracks: int
+    listened_tracks: int
+    fav_tracks: int
+    fav_tracks_by_playlists: List[FavPlaylistInfo]
+    fav_percentage: float
 
 
 class Mirror:
@@ -179,6 +188,14 @@ def read_listened_tracks(cells=None):
         tags_list = csv_playlist.read_tags_from_csv(listened_file_name, False, False)
     else:
         tags_list = csv_playlist.read_tags_from_csv_fast(listened_file_name, cells)
+    return tags_list
+
+
+def read_listened_tracks_only_one_param(param):
+    if not os.path.isfile(listened_file_name):
+        return []
+
+    tags_list = csv_playlist.read_tags_from_csv_only_one_param(listened_file_name, param)
     return tags_list
 
 
@@ -1127,7 +1144,6 @@ def cache_find_best(filter_names, include_subscribed, min_not_listened, min_list
     all_listened_tracks = read_listened_tracks(['ISRC', 'SPOTY_LENGTH'])
     all_listened_tracks_dict = utils.tags_list_to_dict_by_isrc_and_length(all_listened_tracks)
 
-
     # multi thread
     try:
         parts = np.array_split(new_playlists, THREADS_COUNT)
@@ -1135,7 +1151,8 @@ def cache_find_best(filter_names, include_subscribed, min_not_listened, min_list
         counters = []
         results = Queue()
 
-        with click.progressbar(length=len(new_playlists), label=f'Collecting info for {len(new_playlists)} playlists') as bar:
+        with click.progressbar(length=len(new_playlists),
+                               label=f'Collecting info for {len(new_playlists)} playlists') as bar:
             # start threads
             for i, part in enumerate(parts):
                 counter = Value('i', 0)
@@ -1171,7 +1188,6 @@ def cache_find_best(filter_names, include_subscribed, min_not_listened, min_list
         click.echo('Aborted.')
         sys.exit()
 
-
     if min_not_listened > 0:
         infos = (x for x in infos if len(x.tracks) - len(x.fav_tracks) >= min_not_listened)
 
@@ -1197,3 +1213,247 @@ def __get_subscription_info_thread(playlists, data, check_likes, all_listened_tr
         if i + 1 == len(playlists):
             counter.value += (i % 100) + 1
     result.put(res)
+
+
+def cache_find_best_fast(filter_names, min_not_listened, min_listened):
+    new_playlists = get_cached_playlists_fast()
+
+    data = get_user_library_fast(filter_names)
+    infos = []
+
+    # multi thread
+    try:
+        parts = np.array_split(new_playlists, THREADS_COUNT)
+        threads = []
+        counters = []
+        results = Queue()
+
+        with click.progressbar(length=len(new_playlists),
+                               label=f'Collecting info for {len(new_playlists)} playlists') as bar:
+            # start threads
+            for i, part in enumerate(parts):
+                counter = Value('i', 0)
+                counters.append(counter)
+                playlists_part = list(part)
+                thread = Process(target=__get_subscription_info_thread_fast,
+                                 args=(playlists_part, data, data.listened_tracks, counter, results))
+                threads.append(thread)
+                thread.daemon = True  # This thread dies when main thread exits
+                thread.start()
+
+                # update bar
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # waiting for complete
+            while not bar.finished:
+                time.sleep(0.1)
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # combine results
+            for i in range(len(parts)):
+                res = results.get()
+                infos.extend(res)
+
+    except (KeyboardInterrupt, SystemExit):  # aborted by user
+        click.echo()
+        click.echo('Aborted.')
+        sys.exit()
+
+    if min_not_listened > 0:
+        infos = (x for x in infos if x.tracks - x.fav_tracks >= min_not_listened)
+
+    if min_listened > 0:
+        infos = (x for x in infos if x.listened_tracks >= min_listened)
+
+    infos = (x for x in infos if x.fav_percentage > 0)
+
+    infos = sorted(infos, key=lambda x: x.fav_percentage)
+    return infos
+
+
+def __get_subscription_info_thread_fast(playlists, data, all_listened_tracks_dict, counter, result):
+    res = []
+
+    for i, playlist in enumerate(playlists):
+        info = __get_subscription_info_fast(data, playlist, all_listened_tracks_dict)
+        if info is not None:
+            res.append(info)
+
+        if (i + 1) % 100 == 0:
+            counter.value += 100
+        if i + 1 == len(playlists):
+            counter.value += (i % 100) + 1
+    result.put(res)
+
+
+def get_cached_playlists_fast():
+    playlists = []
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    # multi thread
+    try:
+        parts = np.array_split(csvs_in_path, THREADS_COUNT)
+        threads = []
+        counters = []
+        results = Queue()
+
+        with click.progressbar(length=len(csvs_in_path), label=f'Reading {len(csvs_in_path)} cached playlists') as bar:
+            # start threads
+            for i, part in enumerate(parts):
+                counter = Value('i', 0)
+                counters.append(counter)
+                csvs_in_path = list(part)
+                thread = Process(target=read_csvs_thread_fast, args=(csvs_in_path, counter, results))
+                threads.append(thread)
+                thread.daemon = True  # This thread dies when main thread exits
+                thread.start()
+
+                # update bar
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # waiting for complete
+            while not bar.finished:
+                time.sleep(0.1)
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # combine results
+            for i in range(len(parts)):
+                res = results.get()
+                playlists.extend(res)
+
+    except (KeyboardInterrupt, SystemExit):  # aborted by user
+        click.echo()
+        click.echo('Aborted.')
+        sys.exit()
+    return playlists
+
+
+def read_csvs_thread_fast(filenames, counter, result):
+    res = []
+
+    for i, file_name in enumerate(filenames):
+        base_name = os.path.basename(file_name)
+        base_name = os.path.splitext(base_name)[0]
+        playlist_id = str.split(base_name, ' - ')[0]
+        try:
+            playlist_name = str.split(base_name, ' - ')[1]
+        except:
+            playlist_name = "Unknown"
+        tags = csv_playlist.read_tags_from_csv_only_one_param(file_name, 'ISRC')
+        pl = {}
+        pl['id'] = playlist_id
+        pl['name'] = playlist_name
+        pl['tracks'] = tags
+        res.append(pl)
+
+        if (i + 1) % 100 == 0:
+            counter.value += 100
+        if i + 1 == len(filenames):
+            counter.value += (i % 100) + 1
+    result.put(res)
+
+
+def __get_subscription_info_fast(data: UserLibrary, sub_playlist, all_listened_tracks_dict) -> SubscriptionInfoFast:
+    sub_tags_list = sub_playlist['tracks']
+
+    # get listened tracks
+    not_listened_tracks = {}
+    listened_or_liked = {}
+    for key in sub_tags_list:
+        if key in all_listened_tracks_dict:
+            listened_or_liked[key] = None
+        else:
+            not_listened_tracks[key] = None
+
+    tracks_exist_in_fav = {}
+    for track in listened_or_liked:
+        if track in data.fav_tracks:
+            tracks_exist_in_fav[track] = None
+
+    tracks_exist_in_fav_playlists = {}
+    for playlist_name, fav_tracks in data.fav_playlists.items():
+        for track in listened_or_liked:
+            if track in fav_tracks:
+                if playlist_name not in tracks_exist_in_fav_playlists:
+                    tracks_exist_in_fav_playlists[playlist_name] = {}
+                tracks_exist_in_fav_playlists[playlist_name][track] = None
+
+    fav_tracks_by_playlists = []
+    for playlist_name, tracks in tracks_exist_in_fav_playlists.items():
+        i = FavPlaylistInfo()
+        i.playlist_name = playlist_name
+        i.tracks_count = len(tracks)
+        fav_tracks_by_playlists.append(i)
+    fav_tracks_by_playlists = sorted(fav_tracks_by_playlists, key=lambda x: x.tracks_count, reverse=True)
+
+    fav_percentage = 0
+    if len(listened_or_liked) != 0:
+        fav_percentage = len(tracks_exist_in_fav) / len(listened_or_liked) * 100
+
+    info = SubscriptionInfoFast()
+    info.fav_percentage = fav_percentage
+    info.playlist = sub_playlist
+    info.listened_tracks = len(listened_or_liked.items())
+    info.fav_tracks = len(tracks_exist_in_fav.items())
+    info.fav_tracks_by_playlists = fav_tracks_by_playlists
+    info.tracks = len(sub_tags_list)
+
+    return info
+
+
+def get_user_library_fast(filter_names=None) -> UserLibrary:
+    lib = UserLibrary()
+
+    lib.listened_tracks = read_listened_tracks_only_one_param('ISRC')
+
+    if len(lib.listened_tracks) == 0:
+        click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
+        exit()
+
+    lib.all_playlists = spotify_api.get_list_of_playlists()
+
+    fav_playlists = []
+
+    if filter_names is None:
+        if len(PLAYLISTS_WITH_FAVORITES) < 1:
+            click.echo('No favorites playlists specified. Edit "PLAYLISTS_WITH_FAVORITES" field in settings.toml file '
+                       'located in the collector plugin folder.')
+            exit()
+
+        for rule in PLAYLISTS_WITH_FAVORITES:
+            for playlist in lib.all_playlists:
+                if re.findall(rule, playlist['name']):
+                    fav_playlists.append(playlist['id'])
+    else:
+        playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
+
+        # playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
+        click.echo(f'{len(playlists)}/{len(lib.all_playlists)} playlists matches the regex filter')
+        for playlist in playlists:
+            fav_playlists.append(playlist['id'])
+
+    fav_tracks, fav_tags, fav_playlists = spotify_api.get_tracks_from_playlists(fav_playlists)
+
+    lib.fav_tracks = {}  # isrc: [length, length, length]
+    lib.fav_playlists = {}  # playlist_name: [isrc: [length, length], isrc: [length, length]]
+    for tags in fav_tags:
+        isrc = tags['ISRC']
+        lib.fav_tracks[isrc] = None
+
+        playlist_name = tags['SPOTY_PLAYLIST_NAME']
+        if playlist_name not in lib.fav_playlists:
+            lib.fav_playlists[playlist_name] = {}
+        lib.fav_playlists[playlist_name][isrc] = None
+
+    return lib
