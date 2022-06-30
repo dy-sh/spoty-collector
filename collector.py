@@ -724,13 +724,13 @@ Cache playlist with specified id (save to csv files on disk).
 @click.option('--check-likes', '-f', is_flag=True,
               help='Check liked tracks, not only listened (more accurate, but slower).')
 def cache_find_best(filter_names, include_subscribed, min_not_listened, limit, min_listened, check_likes,
-                    min_fav_percentage,min_fav_tracks):
+                    min_fav_percentage, min_fav_tracks):
     """
 Find best from cached playlists.
     """
 
     infos = col.cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes,
-                                min_fav_percentage,min_fav_tracks)
+                                min_fav_percentage, min_fav_tracks)
     print_mirror_infos(infos, limit)
 
 
@@ -754,3 +754,21 @@ Find best from cached playlists.
 
     infos = col.cache_find_best_fast(filter_names, min_not_listened, min_listened, min_fav_percentage, min_fav_tracks)
     print_mirror_infos_fast(infos, limit)
+
+
+@collector.command("cache-stats")
+def cache_stats():
+    """
+Cached playlists statistics
+    """
+    infos = col.cache_find_best_fast("-----IGNORE-----", 0, 0, 0, 0, True)
+    unique_tracks = {}
+    tracks_total = 0
+    for i, info in enumerate(infos):
+        tracks_total += info.tracks
+        for track in info.tracks_list:
+            unique_tracks[track] = None
+    click.echo("\n======================================================================\n")
+    click.echo(f'Cached playlists: {len(infos)}')
+    click.echo(f'Tracks total in playlists: {tracks_total}')
+    click.echo(f'Total unique tracks: {len(unique_tracks)}')
