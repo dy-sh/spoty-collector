@@ -15,7 +15,7 @@ import numpy as np
 import time
 import sys
 
-THREADS_COUNT = 12
+THREADS_COUNT = 2
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -90,7 +90,8 @@ class SubscriptionInfo:
 
 
 class SubscriptionInfoFast:
-    playlist: dict
+    playlist_name: str
+    playlist_id: str
     tracks: int
     listened_tracks: int
     fav_tracks: int
@@ -1403,7 +1404,8 @@ def __get_subscription_info_fast(data: UserLibrary, sub_playlist, all_listened_t
 
     info = SubscriptionInfoFast()
     info.fav_percentage = fav_percentage
-    info.playlist = sub_playlist
+    info.playlist_name = sub_playlist['name']
+    info.playlist_id = sub_playlist['id']
     info.listened_tracks = len(listened_or_liked.items())
     info.fav_tracks = len(tracks_exist_in_fav.items())
     info.fav_tracks_by_playlists = fav_tracks_by_playlists

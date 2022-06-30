@@ -620,7 +620,7 @@ def print_mirror_info_fast(info: SubscriptionInfoFast, index: int = None, count:
     else:
         click.echo("\n======================================================================\n")
 
-    click.echo(f'Playlist        : "{info.playlist["name"]}" ({info.playlist["id"]})')
+    click.echo(f'Playlist        : "{info.playlist_name}" ({info.playlist_id})')
     click.echo(f'Tracks total    : {info.tracks}')
     click.echo(f'Tracks listened : {info.listened_tracks}')
     click.echo(f'Favorite tracks : {info.fav_tracks} ({info.fav_percentage:.1f}%)')
@@ -716,7 +716,7 @@ Cache playlist with specified id (save to csv files on disk).
 @click.option('--min-not-listened', '--mnl', type=int, default=50, show_default=True,
               help='Skip the playlist if the number of not listened tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
-              help='Limit the number of processed playlists.')
+              help='Limit the number of printed best playlists.')
 @click.option('--filter-names', '--fn',
               help='Get only playlists from user library whose names matches this regex filter')
 @click.option('--check-likes', '-f', is_flag=True,
@@ -737,7 +737,7 @@ Find best from cached playlists.
 @click.option('--min-not-listened', '--mnl', type=int, default=50, show_default=True,
               help='Skip the playlist if the number of not listened tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
-              help='Limit the number of processed playlists.')
+              help='Limit the number of printed best playlists.')
 @click.option('--filter-names', '--fn',
               help='Get only playlists from user library whose names matches this regex filter')
 def cache_find_best_fast(filter_names, min_not_listened, limit, min_listened):
