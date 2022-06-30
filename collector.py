@@ -604,8 +604,6 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
         click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')
 
 
-
-
 def print_mirror_infos_fast(infos: List[SubscriptionInfoFast], limit: int = None):
     if limit is None:
         limit = len(infos)
@@ -723,14 +721,15 @@ Cache playlist with specified id (save to csv files on disk).
               help='Get only playlists from user library whose names matches this regex filter')
 @click.option('--check-likes', '-f', is_flag=True,
               help='Check liked tracks, not only listened (more accurate, but slower).')
-def cache_find_best(filter_names, include_subscribed, min_not_listened, limit, min_listened, check_likes):
+def cache_find_best(filter_names, include_subscribed, min_not_listened, limit, min_listened, check_likes,
+                    min_fav_percentage):
     """
 Find best from cached playlists.
     """
 
-    infos = col.cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes,min_fav_percentage)
+    infos = col.cache_find_best(filter_names, include_subscribed, min_not_listened, min_listened, check_likes,
+                                min_fav_percentage)
     print_mirror_infos(infos, limit)
-
 
 
 @collector.command("cache-find-best-fast")
