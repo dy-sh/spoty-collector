@@ -1399,12 +1399,13 @@ def get_user_library_fast(filter_names=None) -> UserLibrary:
     lib.fav_tracks = {}  # isrc: [length, length, length]
     lib.fav_playlists = {}  # playlist_name: [isrc: [length, length], isrc: [length, length]]
     for tags in fav_tags:
-        isrc = tags['ISRC']
-        lib.fav_tracks[isrc] = None
+        if 'ISRC' in tags:
+            isrc = tags['ISRC']
+            lib.fav_tracks[isrc] = None
 
-        playlist_name = tags['SPOTY_PLAYLIST_NAME']
-        if playlist_name not in lib.fav_playlists:
-            lib.fav_playlists[playlist_name] = {}
-        lib.fav_playlists[playlist_name][isrc] = None
+            playlist_name = tags['SPOTY_PLAYLIST_NAME']
+            if playlist_name not in lib.fav_playlists:
+                lib.fav_playlists[playlist_name] = {}
+            lib.fav_playlists[playlist_name][isrc] = None
 
     return lib
