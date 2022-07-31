@@ -15,7 +15,7 @@ import numpy as np
 import time
 import sys
 
-THREADS_COUNT = 12
+THREADS_COUNT = 1
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -28,7 +28,6 @@ settings = Dynaconf(
 
 listened_file_name = settings.COLLECTOR.LISTENED_FILE_NAME
 mirrors_file_name = settings.COLLECTOR.MIRRORS_FILE_NAME
-mirrors_log_file_name = settings.COLLECTOR.MIRRORS_LOG_FILE_NAME
 
 if listened_file_name.startswith("./") or listened_file_name.startswith(".\\"):
     listened_file_name = os.path.join(current_directory, listened_file_name)
@@ -36,14 +35,10 @@ if listened_file_name.startswith("./") or listened_file_name.startswith(".\\"):
 if mirrors_file_name.startswith("./") or mirrors_file_name.startswith(".\\"):
     mirrors_file_name = os.path.join(current_directory, mirrors_file_name)
 
-if mirrors_log_file_name.startswith("./") or mirrors_log_file_name.startswith(".\\"):
-    mirrors_log_file_name = os.path.join(current_directory, mirrors_log_file_name)
-
 cache_dir = os.path.join(current_directory, 'cache')
 
 listened_file_name = os.path.abspath(listened_file_name)
 mirrors_file_name = os.path.abspath(mirrors_file_name)
-mirrors_log_file_name = os.path.abspath(mirrors_log_file_name)
 cache_dir = os.path.abspath(cache_dir)
 
 LISTENED_LIST_TAGS = [
@@ -66,11 +61,19 @@ REDUCE_IF_NOT_UPDATED_DAYS = settings.COLLECTOR.REDUCE_IF_NOT_UPDATED_DAYS
 class UserLibrary:
     mirrors: []
     subscribed_playlist_ids: []
-    listened_tracks: []
-    fav_tracks: {}  # isrc: [length, length, length]
     all_playlists: []
-    fav_playlists: {}  # playlist_name: [track, track, track]
-    log: {}  # sub_playlist_id: [track, track, track]
+    fav_playlist_ids: []
+    listened_tracks: []
+    listened_track_ids: {}
+    listened_track_isrcs: {}
+    listened_track_titles: {}
+    fav_tracks: []
+    fav_track_ids: {}
+    fav_track_isrcs: {}
+    fav_track_titles: {}
+    fav_playlists_by_ids: {}
+    fav_playlists_by_titles: {}
+    fav_playlists_by_isrc: {}
 
 
 class FavPlaylistInfo:
@@ -89,21 +92,35 @@ class SubscriptionInfo:
     last_update: datetime
 
 
-class SubscriptionInfoFast:
+class PlaylistInfo:
     playlist_name: str
     playlist_id: str
-    tracks: int
+    tracks_count: int
     tracks_list: List
-    listened_tracks: int
-    fav_tracks: int
+    listened_tracks_count: int
+    fav_tracks_count: int
     fav_tracks_by_playlists: List[FavPlaylistInfo]
     fav_percentage: float
+    ref_tracks_count: int
+    ref_tracks_by_playlists: List[FavPlaylistInfo]
+    ref_percentage: float
 
 
 class Mirror:
     group: str
     mirror_name: str
     playlist_id: str
+
+
+class FindBestTracksParams:
+    lib: UserLibrary
+    ref_track_ids: {}
+    ref_track_isrcs: {}
+    ref_track_titles: {}
+    min_not_listened: int
+    min_listened: int
+    min_ref_percentage: int
+    min_ref_tracks: int
 
 
 def read_mirrors(group: str = None) -> List[Mirror]:
@@ -526,7 +543,6 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
                         spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
                     all_added_to_mirrors.extend(tracks_added)
                     if len(tracks_added) > 0:
-                        write_mirrors_log(mirror_playlist_id, new_tracks)
                         summery.append(
                             f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
 
@@ -737,46 +753,12 @@ def sort_mirrors():
             playlist_ids.append(m.playlist_id)
 
 
-def write_mirrors_log(mirror_playlist_id, tags_list):
-    with open(mirrors_log_file_name, 'a', encoding='utf-8-sig') as file:
-        for tags in tags_list:
-            file.write(f'{mirror_playlist_id},{tags["SPOTIFY_TRACK_ID"]},{tags["SPOTY_PLAYLIST_ID"]}\n')
-
-
-def read_mirrors_log():
-    if not os.path.isfile(mirrors_log_file_name):
-        return {}
-    with open(mirrors_log_file_name, 'r', encoding='utf-8-sig') as file:
-        log = []
-        lines = file.readlines()
-        for line in lines:
-            line = line.rstrip("\n").strip()
-            if line == "":
-                continue
-            mirror_playlist_id = line.split(',')[0]
-            track_id = line.split(',')[1]
-            sub_playlist_id = line.split(',')[2]
-            rec = [mirror_playlist_id, track_id, sub_playlist_id]
-            log.append(rec)
-
-        return log
-
-
-def find_in_mirrors_log(track_id):
-    records = []
-    log = read_mirrors_log()
-    for rec in log:
-        if rec[1] == track_id:
-            records.append(rec)
-    return records
-
-
-def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, mirror_group: str = None, confirm=False):
+def reduce_mirrors(check_update_date=True, unsub=True, mirror_group: str = None, confirm=False):
     all_unsubscribed = []
     all_not_listened = []
     all_ignored = []
 
-    infos = get_all_subscriptions_info(read_log, mirror_group)
+    infos = get_all_subscriptions_info(mirror_group)
     user_playlists = spotify_api.get_list_of_playlists()
 
     res_infos = []
@@ -819,32 +801,32 @@ def reduce_mirrors(check_update_date=True, read_log=True, unsub=True, mirror_gro
     return res_infos, all_not_listened, all_unsubscribed, all_ignored
 
 
-def get_all_subscriptions_info(read_log=True, mirror_group: str = None) -> List[SubscriptionInfo]:
-    data = get_user_library(read_log, mirror_group)
+def get_all_subscriptions_info(mirror_group: str = None) -> List[SubscriptionInfo]:
+    lib = get_user_library(mirror_group)
     infos = []
 
-    with click.progressbar(data.subscribed_playlist_ids,
-                           label=f'Collecting info for {len(data.mirrors)} playlists') as bar:
+    with click.progressbar(lib.subscribed_playlist_ids,
+                           label=f'Collecting info for {len(lib.mirrors)} playlists') as bar:
         for sub_playlist_id in bar:
-            info = __get_subscription_info(sub_playlist_id, data)
+            info = __get_subscription_info(sub_playlist_id, lib)
             infos.append(info)
 
     return infos
 
 
-def get_subscriptions_info(sub_playlist_ids: List[str], read_log=True) -> List[SubscriptionInfo]:
-    data = get_user_library(read_log)
+def get_subscriptions_info(sub_playlist_ids: List[str]) -> List[SubscriptionInfo]:
+    lib = get_user_library()
     infos = []
 
     for id in sub_playlist_ids:
-        info = __get_subscription_info(id, data)
+        info = __get_subscription_info(id, lib)
         if info is not None:
             infos.append(info)
 
     return infos
 
 
-def get_user_library(read_log=True, mirror_group: str = None, filter_names=None) -> UserLibrary:
+def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_listened=True) -> UserLibrary:
     lib = UserLibrary()
 
     lib.mirrors = read_mirrors(mirror_group)
@@ -856,29 +838,27 @@ def get_user_library(read_log=True, mirror_group: str = None, filter_names=None)
     lib.subscribed_playlist_ids = get_subscribed_playlist_ids(lib.mirrors)
 
     lib.listened_tracks = read_listened_tracks()
+    lib.listened_track_ids = {}  # isrc: [length, length, length]
+    lib.listened_track_isrcs = {}
+    lib.listened_track_titles = {}
+    for tags in lib.listened_tracks:
+        if 'SPOTIFY_TRACK_ID' in tags:
+            id = tags['SPOTIFY_TRACK_ID']
+            lib.listened_track_ids[id] = None
+        if 'ARTIST' in tags and 'TITLE' in tags:
+            title = f"{tags['ARTIST']} - {tags['TITLE']}"
+            lib.listened_track_titles[title] = None
+        if 'ISRC' in tags:
+            isrc = tags['ISRC']
+            lib.listened_track_isrcs[isrc] = None
 
     if len(lib.listened_tracks) == 0:
         click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
         exit()
 
-    lib.log = {}  # sub_playlist_id: [track, track, track]
-    if read_log:
-        listened_dict = {}
-        for track in lib.listened_tracks:
-            listened_dict[track['SPOTIFY_TRACK_ID']] = track
-
-        log = read_mirrors_log()
-        for l in log:
-            track_id = l[1]
-            if track_id in listened_dict:
-                sub_id = l[2]
-                if sub_id not in lib.log:
-                    lib.log[sub_id] = {}
-                lib.log[sub_id][track_id] = listened_dict[track_id]
-
     lib.all_playlists = spotify_api.get_list_of_playlists()
 
-    fav_playlists = []
+    fav_playlist_ids = []
 
     if filter_names is None:
         if len(PLAYLISTS_WITH_FAVORITES) < 1:
@@ -889,36 +869,56 @@ def get_user_library(read_log=True, mirror_group: str = None, filter_names=None)
         for rule in PLAYLISTS_WITH_FAVORITES:
             for playlist in lib.all_playlists:
                 if re.findall(rule, playlist['name']):
-                    fav_playlists.append(playlist['id'])
+                    fav_playlist_ids.append(playlist['id'])
     else:
         playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
 
         # playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
         click.echo(f'{len(playlists)}/{len(lib.all_playlists)} playlists matches the regex filter')
         for playlist in playlists:
-            fav_playlists.append(playlist['id'])
+            fav_playlist_ids.append(playlist['id'])
 
-    fav_tracks, fav_tags, fav_playlists = spotify_api.get_tracks_from_playlists(fav_playlists)
+    fav_tracks, fav_tags, fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
 
-    lib.fav_tracks = {}  # isrc: [length, length, length]
-    lib.fav_playlists = {}  # playlist_name: [isrc: [length, length], isrc: [length, length]]
+    lib.fav_track_isrcs = {}
+    lib.fav_track_ids = {}
+    lib.fav_track_titles = {}
+    lib.fav_playlists_by_ids = {}
+    lib.fav_playlists_by_titles = {}
+    lib.fav_playlists_by_isrc = {}
+    lib.fav_playlist_ids = fav_playlist_ids
+    lib.fav_tracks = fav_tracks
     for tags in fav_tags:
-        isrc = tags['ISRC']
-        if isrc not in lib.fav_tracks:
-            lib.fav_tracks[isrc] = []
-        lib.fav_tracks[isrc].append(tags['SPOTY_LENGTH'])
-
         playlist_name = tags['SPOTY_PLAYLIST_NAME']
-        if playlist_name not in lib.fav_playlists:
-            lib.fav_playlists[playlist_name] = {}
-        if isrc not in lib.fav_playlists[playlist_name]:
-            lib.fav_playlists[playlist_name][isrc] = []
-        lib.fav_playlists[playlist_name][isrc].append(tags['SPOTY_LENGTH'])
+        if 'SPOTIFY_TRACK_ID' in tags:
+            id = tags['SPOTIFY_TRACK_ID']
+            lib.fav_track_ids[id] = playlist_name
+            if playlist_name not in lib.fav_playlists_by_ids:
+                lib.fav_playlists_by_ids[playlist_name] = {}
+            lib.fav_playlists_by_ids[playlist_name][id] = None
+            if add_fav_to_listened:
+                lib.listened_track_ids[id] = None
+        if 'ARTIST' in tags and 'TITLE' in tags:
+            title = f"{tags['ARTIST']} - {tags['TITLE']}"
+            lib.fav_track_titles[title] = playlist_name
+            if playlist_name not in lib.fav_playlists_by_titles:
+                lib.fav_playlists_by_titles[playlist_name] = {}
+            lib.fav_playlists_by_titles[playlist_name][title] = None
+            if add_fav_to_listened:
+                lib.listened_track_titles[title] = None
+        if 'ISRC' in tags:
+            isrc = tags['ISRC']
+            lib.fav_track_isrcs[isrc] = playlist_name
+            if playlist_name not in lib.fav_playlists_by_isrc:
+                lib.fav_playlists_by_isrc[playlist_name] = {}
+            lib.fav_playlists_by_isrc[playlist_name][isrc] = None
+            if add_fav_to_listened:
+                lib.listened_track_isrcs[isrc] = None
 
     return lib
 
 
-def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=None,
+def __get_subscription_info(sub_playlist_id: str, lib: UserLibrary, playlist=None,
                             check_likes=False, all_listened_tracks_dict=None) -> SubscriptionInfo:
     # get all tracks from subscribed playlists
     if playlist is None:
@@ -942,27 +942,15 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=No
         liked, not_liked = spotify_api.get_liked_tags_list(not_listened_tracks)
         listened_or_liked.extend(liked)
 
-    if data.log is not None:
-        if sub_playlist_id in data.log:
-            sub_tags_dict = {}
-            for sub_track in sub_tags_list:
-                sub_tags_dict[sub_track['SPOTIFY_TRACK_ID']] = sub_track
-
-            log_tracks = data.log[sub_playlist_id]
-            for log_track_id, log_track in log_tracks.items():
-                if log_track_id not in sub_tags_dict:
-                    sub_tags_list.append(log_track)
-                    listened_or_liked.append(log_track)
-
     tracks_exist_in_fav = []
     for track in listened_or_liked:
-        if track['ISRC'] in data.fav_tracks:
-            for length in data.fav_tracks[track['ISRC']]:
+        if track['ISRC'] in lib.fav_tracks:
+            for length in lib.fav_tracks[track['ISRC']]:
                 if length == track['SPOTY_LENGTH']:
                     tracks_exist_in_fav.append(track)
 
     tracks_exist_in_fav_playlists = {}
-    for playlist_name, fav_tracks in data.fav_playlists.items():
+    for playlist_name, fav_tracks in lib.fav_playlist_ids.items():
         for track in listened_or_liked:
             if track['ISRC'] in fav_tracks:
                 for length in fav_tracks[track['ISRC']]:
@@ -999,7 +987,7 @@ def __get_subscription_info(sub_playlist_id: str, data: UserLibrary, playlist=No
     info.fav_tracks_by_playlists = fav_tracks_by_playlists
     info.tracks = sub_tags_list
 
-    for m in data.mirrors:
+    for m in lib.mirrors:
         if sub_playlist_id == m.playlist_id:
             info.mirror_name = m.mirror_name
 
@@ -1127,12 +1115,11 @@ def read_csvs_thread(filenames, counter, result):
     result.put(res)
 
 
-
-def __get_subscription_info_thread(playlists, data, check_likes, all_listened_tracks_dict, counter, result):
+def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tracks_dict, counter, result):
     res = []
 
     for i, playlist in enumerate(playlists):
-        info = __get_subscription_info(playlist['id'], data, playlist, check_likes, all_listened_tracks_dict)
+        info = __get_subscription_info(playlist['id'], lib, playlist, check_likes, all_listened_tracks_dict)
         if info is not None:
             res.append(info)
 
@@ -1143,12 +1130,35 @@ def __get_subscription_info_thread(playlists, data, check_likes, all_listened_tr
     result.put(res)
 
 
-def cache_find_best(filter_names=None, min_not_listened=0, min_listened=0, min_fav_percentage=0, min_fav_tracks=0,
-                         include_unique_tracks=False) -> List[SubscriptionInfoFast]:
+def cache_find_best(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
+                    min_ref_percentage=0, min_ref_tracks=0,
+                    include_unique_tracks=False) -> List[PlaylistInfo]:
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
 
-    data = get_user_library_fast(filter_names)
     infos = []
+
+    ref_tracks, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
+
+    params = FindBestTracksParams()
+    params.lib = lib
+    params.min_not_listened = min_not_listened
+    params.min_listened = min_listened
+    params.min_ref_percentage = min_ref_percentage
+    params.min_ref_tracks = min_ref_tracks
+
+    params.ref_track_ids = {}
+    params.ref_track_isrcs = {}
+    params.ref_track_titles = {}
+    for tags in ref_tags:
+        if 'SPOTIFY_TRACK_ID' in tags:
+            id = tags['SPOTIFY_TRACK_ID']
+            params.ref_track_ids[id] = None
+        if 'ARTIST' in tags and 'TITLE' in tags:
+            title = f"{tags['ARTIST']} - {tags['TITLE']}"
+            params.ref_track_titles[title] = None
+        if 'ISRC' in tags:
+            isrc = tags['ISRC']
+            params.ref_track_isrcs[isrc] = None
 
     unique_tracks = {}
     total_tracks_count = 0
@@ -1167,10 +1177,8 @@ def cache_find_best(filter_names=None, min_not_listened=0, min_listened=0, min_f
                 counter = Value('i', 0)
                 counters.append(counter)
                 playlists_part = list(part)
-                thread = Process(target=__get_subscription_info_thread_fast,
-                                 args=(playlists_part, data, data.listened_tracks, counter, results,
-                                       min_not_listened, min_listened, min_fav_percentage, min_fav_tracks,
-                                       include_unique_tracks))
+                thread = Process(target=__get_playlist_info_thread,
+                                 args=(playlists_part, params, counter, results, include_unique_tracks))
                 threads.append(thread)
                 thread.daemon = True  # This thread dies when main thread exits
                 thread.start()
@@ -1206,14 +1214,13 @@ def cache_find_best(filter_names=None, min_not_listened=0, min_listened=0, min_f
         click.echo('Aborted.')
         sys.exit()
 
-    infos = sorted(infos, key=lambda x: x.fav_percentage)
+    infos = sorted(infos, key=lambda x: (x.tracks_count - x.listened_tracks_count))
+    infos = sorted(infos, key=lambda x: x.ref_percentage)
     return infos, total_tracks_count, unique_tracks
 
 
-def __get_subscription_info_thread_fast(csv_filenames, data, all_listened_tracks_dict, counter, result,
-                                        min_not_listened, min_listened, min_fav_percentage, min_fav_tracks,
-                                        include_unique_tracks):
-    playlists = []
+def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, counter, result, include_unique_tracks):
+    infos = []
 
     unique_tracks = {}
     total_tracks_count = 0
@@ -1232,125 +1239,66 @@ def __get_subscription_info_thread_fast(csv_filenames, data, all_listened_tracks
         playlist['name'] = playlist_name
         playlist['tracks'] = tags
 
-        info = __get_subscription_info_fast(data, playlist, all_listened_tracks_dict)
+        info = __get_playlist_info(params, playlist)
 
         total_tracks_count += len(tags)
         if include_unique_tracks:
             unique_tracks |= tags
 
         if info is not None:
-            if min_not_listened <= 0 or info.tracks - info.listened_tracks >= min_not_listened:
-                if min_listened <= 0 or info.listened_tracks >= min_listened:
-                    if min_fav_percentage <= 0 or info.fav_percentage >= min_fav_percentage:
-                        if min_fav_tracks <= 0 or info.fav_tracks >= min_fav_tracks:
-                            playlists.append(info)
+            if params.min_not_listened <= 0 or info.tracks_count - info.listened_tracks_count >= params.min_not_listened:
+                if params.min_listened <= 0 or info.listened_tracks_count >= params.min_listened:
+                    if params.min_ref_percentage <= 0 or info.ref_percentage >= params.min_ref_percentage:
+                        if params.min_ref_tracks <= 0 or info.ref_tracks_count >= params.min_ref_tracks:
+                            infos.append(info)
 
         if (i + 1) % 100 == 0:
             counter.value += 100
         if i + 1 == len(csv_filenames):
             counter.value += (i % 100) + 1
     r = [
-        playlists, total_tracks_count, unique_tracks
+        infos, total_tracks_count, unique_tracks
     ]
     result.put(r)
 
 
-def __get_subscription_info_fast(data: UserLibrary, sub_playlist, all_listened_tracks_dict) -> SubscriptionInfoFast:
-    sub_tags_list = sub_playlist['tracks']
+def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
+    track_isrcs = playlist['tracks']
 
-    # get listened tracks
-    not_listened_tracks = {}
-    listened_or_liked = {}
-    for key in sub_tags_list:
-        if key in all_listened_tracks_dict:
-            listened_or_liked[key] = None
-        else:
-            not_listened_tracks[key] = None
+    info = PlaylistInfo()
+    info.listened_tracks_count = 0
+    info.fav_tracks_count = 0
+    info.fav_tracks_by_playlists = {}
+    info.fav_percentage = 0
+    info.ref_tracks_count = 0
+    info.ref_tracks_by_playlists = {}
+    info.ref_percentage = 0
 
-    tracks_exist_in_fav = {}
-    for track in listened_or_liked:
-        if track in data.fav_tracks:
-            tracks_exist_in_fav[track] = None
+    for isrc in track_isrcs:
+        if isrc in params.lib.listened_track_isrcs:
+            info.listened_tracks_count += 1
+        if isrc in params.lib.fav_track_isrcs:
+            info.fav_tracks_count += 1
+            playlist_name = params.lib.fav_track_isrcs[isrc]
+            if playlist_name in info.fav_tracks_by_playlists:
+                info.fav_tracks_by_playlists[playlist_name] += 1
+            else:
+                info.fav_tracks_by_playlists[playlist_name] = 1
+        if isrc in params.ref_track_isrcs:
+            info.ref_tracks_count += 1
+            playlist_name = params.lib.fav_track_isrcs[isrc]
+            if playlist_name in info.ref_tracks_by_playlists:
+                info.ref_tracks_by_playlists[playlist_name] += 1
+            else:
+                info.ref_tracks_by_playlists[playlist_name] = 1
 
-    tracks_exist_in_fav_playlists = {}
-    for playlist_name, fav_tracks in data.fav_playlists.items():
-        for track in listened_or_liked:
-            if track in fav_tracks:
-                if playlist_name not in tracks_exist_in_fav_playlists:
-                    tracks_exist_in_fav_playlists[playlist_name] = {}
-                tracks_exist_in_fav_playlists[playlist_name][track] = None
+    if info.listened_tracks_count != 0:
+        info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
+    if info.listened_tracks_count != 0:
+        info.ref_percentage = info.ref_tracks_count / info.listened_tracks_count * 100
 
-    fav_tracks_by_playlists = []
-    for playlist_name, tracks in tracks_exist_in_fav_playlists.items():
-        i = FavPlaylistInfo()
-        i.playlist_name = playlist_name
-        i.tracks_count = len(tracks)
-        fav_tracks_by_playlists.append(i)
-    fav_tracks_by_playlists = sorted(fav_tracks_by_playlists, key=lambda x: x.tracks_count, reverse=True)
-
-    fav_percentage = 0
-    if len(listened_or_liked) != 0:
-        fav_percentage = len(tracks_exist_in_fav) / len(listened_or_liked) * 100
-
-    info = SubscriptionInfoFast()
-    info.fav_percentage = fav_percentage
-    info.playlist_name = sub_playlist['name']
-    info.playlist_id = sub_playlist['id']
-    info.listened_tracks = len(listened_or_liked.items())
-    info.fav_tracks = len(tracks_exist_in_fav.items())
-    info.fav_tracks_by_playlists = fav_tracks_by_playlists
-    info.tracks = len(sub_tags_list)
+    info.playlist_name = playlist['name']
+    info.playlist_id = playlist['id']
+    info.tracks_count = len(track_isrcs)
 
     return info
-
-
-def get_user_library_fast(filter_names=None) -> UserLibrary:
-    lib = UserLibrary()
-
-    lib.listened_tracks = read_listened_tracks_only_one_param('ISRC')
-
-    if len(lib.listened_tracks) == 0:
-        click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
-        exit()
-
-    lib.all_playlists = spotify_api.get_list_of_playlists()
-
-    fav_playlists = []
-
-    if filter_names is None:
-        if len(PLAYLISTS_WITH_FAVORITES) < 1:
-            click.echo('No favorites playlists specified. Edit "PLAYLISTS_WITH_FAVORITES" field in settings.toml file '
-                       'located in the collector plugin folder.')
-            exit()
-
-        for rule in PLAYLISTS_WITH_FAVORITES:
-            for playlist in lib.all_playlists:
-                if re.findall(rule, playlist['name']):
-                    fav_playlists.append(playlist['id'])
-    else:
-        playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
-
-        # playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
-        click.echo(f'{len(playlists)}/{len(lib.all_playlists)} playlists matches the regex filter')
-        for playlist in playlists:
-            fav_playlists.append(playlist['id'])
-
-    fav_tracks, fav_tags, fav_playlists = spotify_api.get_tracks_from_playlists(fav_playlists)
-
-    lib.fav_tracks = {}  # isrc: [length, length, length]
-    lib.fav_playlists = {}  # playlist_name: [isrc: [length, length], isrc: [length, length]]
-    for tags in fav_tags:
-        if 'ISRC' in tags:
-            isrc = tags['ISRC']
-            lib.fav_tracks[isrc] = None
-
-            playlist_name = tags['SPOTY_PLAYLIST_NAME']
-            if playlist_name not in lib.fav_playlists:
-                lib.fav_playlists[playlist_name] = {}
-            lib.fav_playlists[playlist_name][isrc] = None
-
-    return lib
-
-
-def cache_fav_spotify_tracks():
-    return None

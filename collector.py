@@ -1,5 +1,5 @@
 import spoty.plugins.collector.collector_plugin as col
-from spoty.plugins.collector.collector_plugin import SubscriptionInfo, SubscriptionInfoFast
+from spoty.plugins.collector.collector_plugin import SubscriptionInfo, PlaylistInfo
 import spoty.utils
 from spoty import spotify_api
 from spoty import csv_playlist
@@ -29,7 +29,6 @@ Prints configuration parameters.
     click.echo(f'--------- SETTINGS: ----------')
     click.echo(f'LISTENED_FILE_NAME: {col.listened_file_name}')
     click.echo(f'MIRRORS_FILE_NAME: {col.mirrors_file_name}')
-    click.echo(f'MIRRORS_LOG_FILE_NAME: {col.mirrors_log_file_name}')
 
 
 @collector.command("sub")
@@ -422,36 +421,16 @@ Sort mirrors in the mirrors file and check for subscribed playlist id duplicates
     col.sort_mirrors()
 
 
-@collector.command("find-in-mirrors-log")
-@click.argument("track_id")
-def find_in_mirrors_log(track_id):
-    """
-Specify the track ID and find out to which mirrors it was added from which subscribed playlists.
-    """
-    track_id = spotify_api.parse_track_id(track_id)
-
-    records = col.find_in_mirrors_log(track_id)
-    if len(records) == 0:
-        click.echo(f'Track {track_id} not found in the log.')
-        exit()
-
-    click.echo(f'Track {track_id} was added (subscribed playlist id : mirror playlist id):')
-    for rec in records:
-        click.echo(f'{rec[2]} : {rec[0]}')
-
-
 @collector.command("reduce")
 @click.option('--dont-check-update-date', '-D', is_flag=True,
               help='Do not check last updated date of subscribed playlist.')
-@click.option('--dont-read-log', '-L', is_flag=True,
-              help='Do not read mirrors history from log file (use current playlists state only).')
 @click.option('--dont-unsubscribe', '-U', is_flag=True,
               help='Do not unsubscribe (list only).')
 @click.option('--mirror-group', '--g',
               help='Mirror group name (all if not specified).')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask any questions.')
-def reduce_mirrors(dont_check_update_date, dont_read_log, dont_unsubscribe, mirror_group, confirm):
+def reduce_mirrors(dont_check_update_date, dont_unsubscribe, mirror_group, confirm):
     """
 Remove playlists from subscriptions that contain few good tracks.
 
@@ -467,7 +446,7 @@ Next, you will be asked to unsubscribe from playlists that you have listened to 
 This will allow you to subscribe to only those playlists that contain enough good (in your opinion) tracks.
     """
     infos, all_not_listened, all_unsubscribed, all_ignored \
-        = col.reduce_mirrors(not dont_check_update_date, not dont_read_log, not dont_unsubscribe, mirror_group, confirm)
+        = col.reduce_mirrors(not dont_check_update_date, not dont_unsubscribe, mirror_group, confirm)
 
     click.echo("\n------------------------------------------")
     click.echo("Subscriptions by favorite percentage:")
@@ -477,7 +456,7 @@ This will allow you to subscribe to only those playlists that contain enough goo
 
     for info in infos:
         click.echo(
-            f'{info.fav_percentage:.1f} : {len(info.listened_tracks)} / {len(info.tracks)} : {info.playlist["id"]} : {info.playlist["name"]}')
+            f'{info.fav_percentage:.1f} : {len(info.listened_tracks_count)} / {len(info.tracks_count)} : {info.playlist["id"]} : {info.playlist["name"]}')
 
     click.echo("------------------------------------------")
     click.echo(f'{len(infos)} subscribed playlists total.')
@@ -491,9 +470,7 @@ This will allow you to subscribe to only those playlists that contain enough goo
 
 @collector.command("info-sub")
 @click.argument("playlist_id")
-@click.option('--dont-read-log', '-L', is_flag=True,
-              help='Do not read mirrors history from log file (use current playlists state only).')
-def info_sub(playlist_id, dont_read_log):
+def info_sub(playlist_id):
     """
 Print collected info about subscription (or any other) playlists.
 
@@ -501,15 +478,13 @@ PLAYLIST_ID - ID or URI of playlist.
     """
     playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
-    infos = col.get_subscriptions_info([playlist_id], not dont_read_log)
+    infos = col.get_subscriptions_info([playlist_id])
     print_mirror_infos(infos)
 
 
 @collector.command("info-mirror")
 @click.argument("mirror_playlist_id")
-@click.option('--dont-read-log', '-L', is_flag=True,
-              help='Do not read mirrors history from log file (use current playlists state only).')
-def info_mirror(mirror_playlist_id, dont_read_log):
+def info_mirror(mirror_playlist_id):
     """
 Print info about specified mirror.
 
@@ -520,12 +495,12 @@ PLAYLIST_ID - mirror playlist ID or URI.
     if subs is None:
         exit()
 
-    data = col.get_user_library(not dont_read_log)
+    lib = col.get_user_library()
     infos = []
 
     with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
         for id in bar:
-            info = col.__get_subscription_info(id, data)
+            info = col.__get_subscription_info(id, lib)
             if info is not None:
                 infos.append(info)
 
@@ -534,9 +509,7 @@ PLAYLIST_ID - mirror playlist ID or URI.
 
 @collector.command("info-mirror-name")
 @click.argument("mirror_name")
-@click.option('--dont-read-log', '-L', is_flag=True,
-              help='Do not read mirrors history from log file (use current playlists state only).')
-def info_mirror_name(mirror_name, dont_read_log):
+def info_mirror_name(mirror_name):
     """
 Print info about specified mirror.
 
@@ -547,12 +520,12 @@ MIRROR_NAME - mirror name.
     if subs is None:
         exit()
 
-    data = col.get_user_library(not dont_read_log)
+    lib = col.get_user_library()
     infos = []
 
     with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
         for id in bar:
-            info = col.__get_subscription_info(id, data)
+            info = col.__get_subscription_info(id, lib)
             if info is not None:
                 infos.append(info)
 
@@ -560,15 +533,13 @@ MIRROR_NAME - mirror name.
 
 
 @collector.command("info-all")
-@click.option('--dont-read-log', '-L', is_flag=True,
-              help='Do not read mirrors history from log file (use current playlists state only).')
 @click.option('--mirror-group', '--g',
               help='Mirror group name (all if not specified).')
-def info_all_mirrors(dont_read_log, mirror_group):
+def info_all_mirrors(mirror_group):
     """
 Print info all mirrors.
     """
-    infos = col.get_all_subscriptions_info(not dont_read_log, mirror_group)
+    infos = col.get_all_subscriptions_info(mirror_group)
 
     print_mirror_infos(infos)
 
@@ -604,27 +575,29 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
         click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')
 
 
-def print_mirror_infos_fast(infos: List[SubscriptionInfoFast], limit: int = None):
+def print_playlist_infos(infos: List[PlaylistInfo], limit: int = None):
     if limit is None:
         limit = len(infos)
     for i, info in enumerate(infos):
         if len(infos) - i - 1 < limit:
-            print_mirror_info_fast(info, i, len(infos))
+            print_playlist_info(info, i, len(infos))
 
 
-def print_mirror_info_fast(info: SubscriptionInfoFast, index: int = None, count: int = None):
+def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None):
     if index is not None and count is not None:
         click.echo(f"\n============================== {index + 1} / {count} ==============================\n")
     else:
         click.echo("\n======================================================================\n")
 
     click.echo(f'Playlist        : "{info.playlist_name}" ({info.playlist_id})')
-    click.echo(f'Tracks total    : {info.tracks}')
-    click.echo(f'Tracks listened : {info.listened_tracks}')
-    click.echo(f'Favorite tracks : {info.fav_tracks} ({info.fav_percentage:.1f}%)')
+    click.echo(f'Tracks total    : {info.tracks_count}')
+    click.echo(f'Tracks listened : {info.listened_tracks_count}')
+    click.echo(f'Favorite tracks : {info.fav_tracks_count} ({info.fav_percentage:.1f}%)')
+    click.echo(f'Ref tracks      : {info.ref_tracks_count} ({info.ref_percentage:.1f}%)')
     click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
-    for i, pl_info in enumerate(info.fav_tracks_by_playlists):
-        click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')
+    srt = {k: v for k, v in sorted(info.ref_tracks_by_playlists.items(), key=lambda item: item[1], reverse=True)}
+    for pl_name in srt:
+        click.echo(f'{srt[pl_name]} : "{pl_name}"')
 
 
 @collector.command("find-best")
@@ -653,12 +626,12 @@ Find best public playlist by specified search query.
                 continue
         new_playlists.append(playlist)
 
-    data = col.get_user_library(True)
+    lib = col.get_user_library(True)
     infos = []
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist in bar:
-            info = col.__get_subscription_info(playlist['id'], data)
+            info = col.__get_subscription_info(playlist['id'], lib)
             if info is not None:
                 infos.append(info)
 
@@ -706,25 +679,55 @@ Cache playlist with specified id (save to csv files on disk).
     click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
 
 
-@collector.command("cache-find-best")
+@collector.command("cache-find-best-by-name")
 @click.option('--min-listened', '--ml', type=int, default=5, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
 @click.option('--min-not-listened', '--mnl', type=int, default=20, show_default=True,
               help='Skip the playlist if the number of not listened tracks is less than the given value.')
-@click.option('--min-fav-percentage', '--mfp', type=int, default=1, show_default=True,
-              help='Skip the playlist if the number favourite percentage is less than the given value.')
-@click.option('--min-fav-tracks', '--mft', type=int, default=3, show_default=True,
-              help='Skip the playlist if the number favourite tracks is less than the given value.')
+@click.option('--min-ref-percentage', '--mrp', type=int, default=1, show_default=True,
+              help='Skip the playlist if the number reference percentage is less than the given value.')
+@click.option('--min-ref-tracks', '--mrt', type=int, default=3, show_default=True,
+              help='Skip the playlist if the number reference tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of printed best playlists.')
-@click.option('--filter-names', '--fn',
-              help='Get only playlists from user library whose names matches this regex filter')
-def cache_find_best(filter_names, min_not_listened, limit, min_listened, min_fav_percentage, min_fav_tracks):
+@click.argument('filter-names')
+def cache_find_best_by_name(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks):
     """
 Find best from cached playlists.
+Provide regex query as argument to get playlists from user library whose names matches this filter.
     """
-    infos, tracks_total, unique_tracks = col.cache_find_best(filter_names, min_not_listened, min_listened, min_fav_percentage, min_fav_tracks)
-    print_mirror_infos_fast(infos, limit)
+    lib = col.get_user_library()
+    ref_playlist_ids = []
+    for playlist in lib.all_playlists:
+        if re.findall(filter_names, playlist['name']):
+            ref_playlist_ids.append(playlist['id'])
+    infos, tracks_total, unique_tracks = col.cache_find_best(lib, ref_playlist_ids, min_not_listened, min_listened,
+                                                             min_ref_percentage, min_ref_tracks)
+    print_playlist_infos(infos, limit)
+
+
+@collector.command("cache-find-best-by-id")
+@click.option('--min-listened', '--ml', type=int, default=5, show_default=True,
+              help='Skip the playlist if the number of listened tracks is less than the given value.')
+@click.option('--min-not-listened', '--mnl', type=int, default=20, show_default=True,
+              help='Skip the playlist if the number of not listened tracks is less than the given value.')
+@click.option('--min-ref-percentage', '--mrp', type=int, default=1, show_default=True,
+              help='Skip the playlist if the number reference percentage is less than the given value.')
+@click.option('--min-ref-tracks', '--mrt', type=int, default=3, show_default=True,
+              help='Skip the playlist if the number reference tracks is less than the given value.')
+@click.option('--limit', type=int, default=1000, show_default=True,
+              help='Limit the number of printed best playlists.')
+@click.argument("playlist_ids", nargs=-1)
+def cache_find_best_by_id(playlist_ids, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks):
+    """
+Find best from cached playlists.
+Provide playlist IDs as argument to get playlists from user library.
+    """
+    lib = col.get_user_library()
+    ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+    infos, tracks_total, unique_tracks = col.cache_find_best(lib, ref_playlist_ids, min_not_listened, min_listened,
+                                                             min_ref_percentage, min_ref_tracks)
+    print_playlist_infos(infos, limit)
 
 
 @collector.command("cache-stats")
