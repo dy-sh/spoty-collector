@@ -761,13 +761,7 @@ def cache_stats():
     """
 Cached playlists statistics
     """
-    infos = col.cache_find_best_fast("-----IGNORE-----", 0, 0, 0, 0, True)
-    unique_tracks = {}
-    tracks_total = 0
-    for i, info in enumerate(infos):
-        tracks_total += info.tracks
-        for track in info.tracks_list:
-            unique_tracks[track] = None
+    infos, tracks_total, unique_tracks = col.cache_find_best_fast("-----IGNORE-----", 0, 0, 0, 0, True)
     click.echo("\n======================================================================\n")
     click.echo(f'Cached playlists: {len(infos)}')
     click.echo(f'Tracks total in playlists: {tracks_total}')

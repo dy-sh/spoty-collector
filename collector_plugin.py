@@ -1223,11 +1223,14 @@ def __get_subscription_info_thread(playlists, data, check_likes, all_listened_tr
 
 
 def cache_find_best_fast(filter_names=None, min_not_listened=0, min_listened=0, min_fav_percentage=0, min_fav_tracks=0,
-                         include_track_list=False) -> List[SubscriptionInfoFast]:
+                         include_unique_tracks=False) -> List[SubscriptionInfoFast]:
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
 
     data = get_user_library_fast(filter_names)
     infos = []
+
+    unique_tracks = {}
+    total_tracks_count = 0
 
     # multi thread
     try:
@@ -1246,7 +1249,7 @@ def cache_find_best_fast(filter_names=None, min_not_listened=0, min_listened=0, 
                 thread = Process(target=__get_subscription_info_thread_fast,
                                  args=(playlists_part, data, data.listened_tracks, counter, results,
                                        min_not_listened, min_listened, min_fav_percentage, min_fav_tracks,
-                                       include_track_list))
+                                       include_unique_tracks))
                 threads.append(thread)
                 thread.daemon = True  # This thread dies when main thread exits
                 thread.start()
@@ -1265,10 +1268,17 @@ def cache_find_best_fast(filter_names=None, min_not_listened=0, min_listened=0, 
                 if added > 0:
                     bar.update(added)
 
-            # combine results
-            for i in range(len(parts)):
-                res = results.get()
-                infos.extend(res)
+        # combine results
+        with click.progressbar(parts, label=f'Processing the results') as bar:
+            for i in bar:
+                try:
+                    r = results.get()
+                    res = r[0]
+                    total_tracks_count += r[1]
+                    unique_tracks |= r[2]
+                    infos.extend(res)
+                except:
+                    click.echo("\nFailed to combine results.")
 
     except (KeyboardInterrupt, SystemExit):  # aborted by user
         click.echo()
@@ -1276,13 +1286,16 @@ def cache_find_best_fast(filter_names=None, min_not_listened=0, min_listened=0, 
         sys.exit()
 
     infos = sorted(infos, key=lambda x: x.fav_percentage)
-    return infos
+    return infos, total_tracks_count, unique_tracks
 
 
 def __get_subscription_info_thread_fast(csv_filenames, data, all_listened_tracks_dict, counter, result,
                                         min_not_listened, min_listened, min_fav_percentage, min_fav_tracks,
-                                        include_track_list=False):
-    res = []
+                                        include_unique_tracks):
+    playlists = []
+
+    unique_tracks = {}
+    total_tracks_count = 0
 
     for i, file_name in enumerate(csv_filenames):
         base_name = os.path.basename(file_name)
@@ -1300,21 +1313,25 @@ def __get_subscription_info_thread_fast(csv_filenames, data, all_listened_tracks
 
         info = __get_subscription_info_fast(data, playlist, all_listened_tracks_dict)
 
-        if include_track_list:
-            info.tracks_list = tags
+        total_tracks_count += len(tags)
+        if include_unique_tracks:
+            unique_tracks |= tags
 
         if info is not None:
             if min_not_listened <= 0 or info.tracks - info.listened_tracks >= min_not_listened:
                 if min_listened <= 0 or info.listened_tracks >= min_listened:
                     if min_fav_percentage <= 0 or info.fav_percentage >= min_fav_percentage:
                         if min_fav_tracks <= 0 or info.fav_tracks >= min_fav_tracks:
-                            res.append(info)
+                            playlists.append(info)
 
         if (i + 1) % 100 == 0:
             counter.value += 100
         if i + 1 == len(csv_filenames):
             counter.value += (i % 100) + 1
-    result.put(res)
+    r = [
+        playlists, total_tracks_count, unique_tracks
+    ]
+    result.put(r)
 
 
 def __get_subscription_info_fast(data: UserLibrary, sub_playlist, all_listened_tracks_dict) -> SubscriptionInfoFast:
