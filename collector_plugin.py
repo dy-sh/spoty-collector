@@ -1285,6 +1285,7 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     info.ref_tracks_count = 0
     info.ref_tracks_by_playlists = {}
     info.ref_percentage = 0
+    info.points = 0
 
     for isrc in track_isrcs:
         if isrc in params.lib.listened_track_isrcs:
@@ -1397,8 +1398,7 @@ def cache_find_best2(lib: UserLibrary, ref_playlist_ids: List[str]) -> List[Play
         click.echo('Aborted.')
         sys.exit()
 
-    infos = sorted(infos, key=lambda x: (x.tracks_count - x.listened_tracks_count))
-    infos = sorted(infos, key=lambda x: x.ref_percentage)
+    infos = sorted(infos, key=lambda x: x.points)
     return infos, total_tracks_count, unique_tracks
 
 
@@ -1423,10 +1423,14 @@ def __get_playlist_info_thread2(csv_filenames, params: FindBestTracksParams, cou
         playlist['isrcs'] = {}
         playlist['artists'] = {}
         for tag in tags:
-            playlist['isrcs'][tag['ISRC']] = None
-            artists = str.split(tag['ARTIST'], ';')
-            for artist in artists:
-                playlist['artists'][artist] = tag['TITLE']
+            if 'ISRC' in tag:
+                playlist['isrcs'][tag['ISRC']] = None
+            if 'ARTIST' in tag and 'TITLE' in tag:
+                artists = str.split(tag['ARTIST'], ';')
+                for artist in artists:
+                    if artist not in playlist['artists']:
+                        playlist['artists'][artist] = {}
+                    playlist['artists'][artist][tag['TITLE']] = None
 
         info = __get_playlist_info2(params, playlist)
 
@@ -1488,5 +1492,7 @@ def __get_playlist_info2(params: FindBestTracksParams, playlist) -> PlaylistInfo
     info.playlist_name = playlist['name']
     info.playlist_id = playlist['id']
     info.tracks_count = len(playlist_isrcs)
+
+    info.points = info.ref_percentage
 
     return info

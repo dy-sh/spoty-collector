@@ -594,6 +594,7 @@ def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None
     click.echo(f'Tracks listened : {info.listened_tracks_count}')
     click.echo(f'Favorite tracks : {info.fav_tracks_count} ({info.fav_percentage:.1f}%)')
     click.echo(f'Ref tracks      : {info.ref_tracks_count} ({info.ref_percentage:.1f}%)')
+    click.echo(f'Points          : {info.points}')
     click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
     srt = {k: v for k, v in sorted(info.ref_tracks_by_playlists.items(), key=lambda item: item[1], reverse=True)}
     for pl_name in srt:
