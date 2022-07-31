@@ -732,6 +732,28 @@ Matched playlists will be used as reference tracks list.
     print_playlist_infos(infos, limit)
 
 
+
+
+@collector.command("cache-find-best-by-name2")
+@click.option('--limit', type=int, default=1000, show_default=True,
+              help='Limit the number of printed best playlists.')
+@click.argument('filter-names')
+def cache_find_best_by_name2(filter_names, limit):
+    """
+Find best from cached playlists.
+Provide regex query as argument to get playlists from user library whose names matches this filter.
+Matched playlists will be used as reference tracks list.
+    """
+    lib = col.get_user_library()
+    ref_playlist_ids = []
+    for playlist in lib.all_playlists:
+        if re.findall(filter_names, playlist['name']):
+            ref_playlist_ids.append(playlist['id'])
+    infos, tracks_total, unique_tracks = col.cache_find_best2(lib, ref_playlist_ids)
+    print_playlist_infos(infos, limit)
+
+
+
 @collector.command("cache-stats")
 def cache_stats():
     """
