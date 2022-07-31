@@ -695,6 +695,7 @@ def cache_find_best_by_name(filter_names, min_not_listened, limit, min_listened,
     """
 Find best from cached playlists.
 Provide regex query as argument to get playlists from user library whose names matches this filter.
+Matched playlists will be used as reference tracks list.
     """
     lib = col.get_user_library()
     ref_playlist_ids = []
@@ -722,6 +723,7 @@ def cache_find_best_by_id(playlist_ids, min_not_listened, limit, min_listened, m
     """
 Find best from cached playlists.
 Provide playlist IDs as argument to get playlists from user library.
+Matched playlists will be used as reference tracks list.
     """
     lib = col.get_user_library()
     ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
