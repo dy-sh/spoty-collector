@@ -941,6 +941,9 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
     fav_tracks, fav_tags, lib.fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
     lib.fav_tracks.add_tracks(fav_tags)
 
+    if add_fav_to_listened:
+        lib.listened_tracks.add_tracks(fav_tags)
+
     return lib
 
 
@@ -1326,6 +1329,8 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     return info
 
 
+
+
 def cache_find_best2(lib: UserLibrary, ref_playlist_ids: List[str]) -> List[PlaylistInfo]:
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
 
@@ -1451,19 +1456,19 @@ def __get_playlist_info2(params: FindBestTracksParams, playlist) -> PlaylistInfo
     playlist_artists = playlist['artists']
 
     for isrc in playlist_isrcs:
-        if isrc in params.lib.listened_track_isrcs:
+        if isrc in params.lib.listened_tracks.track_isrcs:
             info.listened_tracks_count += 1
         else:
             for artist in playlist_isrcs[isrc]:
-                if artist in params.lib.listened_track_artists:
-                    if playlist_isrcs[isrc][artist] in params.lib.listened_track_artists[artist]:
+                if artist in params.lib.listened_tracks.track_artists:
+                    if playlist_isrcs[isrc][artist] in params.lib.listened_tracks.track_artists[artist]:
                         info.listened_tracks_count += 1
                         break
-        if isrc in params.lib.fav_track_isrcs:
+        if isrc in params.lib.fav_tracks.track_isrcs:
             info.fav_tracks_count += 1
-            for artist in params.lib.fav_track_isrcs[isrc]:
-                for title in params.lib.fav_track_isrcs[isrc][artist]:
-                    playlist_name = params.lib.fav_track_isrcs[isrc][artist][title]
+            for artist in params.lib.fav_tracks.track_isrcs[isrc]:
+                for title in params.lib.fav_tracks.track_isrcs[isrc][artist]:
+                    playlist_name = params.lib.fav_tracks.track_isrcs[isrc][artist][title]
                     if playlist_name in info.fav_tracks_by_playlists:
                         info.fav_tracks_by_playlists[playlist_name] += 1
                     else:
@@ -1471,18 +1476,18 @@ def __get_playlist_info2(params: FindBestTracksParams, playlist) -> PlaylistInfo
                 break
         else:
             for artist in playlist_isrcs[isrc]:
-                if artist in params.lib.fav_track_artists:
-                    if playlist_isrcs[isrc][artist] in params.lib.fav_track_artists[artist]:
-                        for title in params.lib.fav_track_artists[artist]:
+                if artist in params.lib.fav_tracks.track_artists:
+                    if playlist_isrcs[isrc][artist] in params.lib.fav_tracks.track_artists[artist]:
+                        for title in params.lib.fav_tracks.track_artists[artist]:
                             info.fav_tracks_count += 1
-                            playlist_name = params.lib.fav_track_artists[artist][title]
+                            playlist_name = params.lib.fav_tracks.track_artists[artist][title]
                             if playlist_name in info.fav_tracks_by_playlists:
                                 info.fav_tracks_by_playlists[playlist_name] += 1
                             else:
                                 info.fav_tracks_by_playlists[playlist_name] = 1
                             break
                         break
-        if isrc in params.ref_track_isrcs:
+        if isrc in params.ref_tracks.track_isrcs:
             info.ref_tracks_count += 1
             # for artist in params.ref_track_isrcs[isrc]:
             #     for title in params.ref_track_isrcs[isrc][artist]:
@@ -1493,11 +1498,11 @@ def __get_playlist_info2(params: FindBestTracksParams, playlist) -> PlaylistInfo
             #             info.ref_tracks_by_playlists[playlist_name] = 1
         else:
             for artist in playlist_isrcs[isrc]:
-                if artist in params.ref_track_artists:
-                    if playlist_isrcs[isrc][artist] in params.ref_track_artists[artist]:
-                        for title in params.ref_track_artists[artist]:
+                if artist in params.ref_tracks.track_artists:
+                    if playlist_isrcs[isrc][artist] in params.ref_tracks.track_artists[artist]:
+                        for title in params.ref_tracks.track_artists[artist]:
                             info.ref_tracks_count += 1
-                            playlist_name = params.ref_track_artists[artist][title]
+                            playlist_name = params.ref_tracks.track_artists[artist][title]
                             if playlist_name in info.ref_tracks_by_playlists:
                                 info.ref_tracks_by_playlists[playlist_name] += 1
                             else:
