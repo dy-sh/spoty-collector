@@ -58,37 +58,77 @@ REDUCE_IGNORE_PLAYLISTS = settings.COLLECTOR.REDUCE_IGNORE_PLAYLISTS
 REDUCE_IF_NOT_UPDATED_DAYS = settings.COLLECTOR.REDUCE_IF_NOT_UPDATED_DAYS
 
 
+class TracksCollection:
+    tracks: List
+    track_ids: dict
+    track_isrcs: dict
+    track_artists: dict
+    playlists_by_isrc: dict
+    playlists_by_ids: dict
+
+    def __init__(self):
+        self.tracks = []
+        self.track_ids = {}
+        self.track_isrcs = {}
+        self.track_artists = {}
+        self.playlists_by_isrc = {}
+        self.playlists_by_ids = {}
+
+    def add_tracks(self, tags_list: List):
+        for tags in tags_list:
+            self.add_track(tags)
+
+    def add_track(self, tags: dict):
+        self.tracks.append(tags)
+
+        playlist_name = None
+        if 'SPOTY_PLAYLIST_NAME' in tags:
+            playlist_name = tags['SPOTY_PLAYLIST_NAME']
+
+        if 'SPOTIFY_TRACK_ID' in tags:
+            id = tags['SPOTIFY_TRACK_ID']
+            self.track_ids[id] = playlist_name
+            if playlist_name is not None:
+                if playlist_name not in self.playlists_by_ids:
+                    self.playlists_by_ids[playlist_name] = {}
+                self.playlists_by_ids[playlist_name][id] = None
+
+        if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
+            isrc = tags['ISRC']
+            title = tags['TITLE']
+            artists = str.split(tags['ARTIST'], ';')
+            self.track_isrcs[isrc] = {}
+            for artist in artists:
+                if artist not in self.track_artists:
+                    self.track_artists[artist] = {}
+                if title not in self.track_artists[artist]:
+                    self.track_artists[artist][title] = {}
+                self.track_artists[artist][title] = playlist_name
+
+                self.track_isrcs[isrc][artist] = {}
+                self.track_isrcs[isrc][artist][title] = playlist_name
+
+                if playlist_name is not None:
+                    if playlist_name not in self.playlists_by_isrc:
+                        self.playlists_by_isrc[playlist_name] = {}
+                    self.playlists_by_isrc[playlist_name][isrc] = None
+
+
 class UserLibrary:
     mirrors: List
     subscribed_playlist_ids: List
     all_playlists: List
     fav_playlist_ids: List
-    listened_tracks: List
-    listened_track_ids: dict
-    listened_track_isrcs: dict
-    listened_track_artists: dict
-    fav_tracks: List
-    fav_track_ids: dict
-    fav_track_isrcs: dict
-    fav_track_artists: dict
-    fav_playlists_by_ids: dict
-    fav_playlists_by_isrc: dict
+    listened_tracks: TracksCollection
+    fav_tracks: TracksCollection
 
     def __init__(self):
         self.mirrors = []
         self.subscribed_playlist_ids = []
         self.all_playlists = []
         self.fav_playlist_ids = []
-        self.listened_tracks = []
-        self.listened_track_ids = {}
-        self.listened_track_isrcs = {}
-        self.listened_track_artists = {}
-        self.fav_tracks = []
-        self.fav_track_ids = {}
-        self.fav_track_isrcs = {}
-        self.fav_track_artists = {}
-        self.fav_playlists_by_ids = {}
-        self.fav_playlists_by_isrc = {}
+        self.listened_tracks = TracksCollection()
+        self.fav_tracks = TracksCollection()
 
 
 class FavPlaylistInfo:
@@ -120,17 +160,19 @@ class PlaylistInfo:
     ref_tracks_by_playlists: dict
     ref_percentage: float
     points: float
+
     def __init__(self):
-        self.tracks_count= 0
-        self.tracks_list= []
-        self.listened_tracks_count= 0
-        self.fav_tracks_count= 0
-        self.fav_tracks_by_playlists= {}
-        self.fav_percentage= 0
-        self.ref_tracks_count= 0
-        self.ref_tracks_by_playlists={}
-        self.ref_percentage= 0
-        self.points= 0
+        self.tracks_count = 0
+        self.tracks_list = []
+        self.listened_tracks_count = 0
+        self.fav_tracks_count = 0
+        self.fav_tracks_by_playlists = {}
+        self.fav_percentage = 0
+        self.ref_tracks_count = 0
+        self.ref_tracks_by_playlists = {}
+        self.ref_percentage = 0
+        self.points = 0
+
 
 class Mirror:
     group: str
@@ -140,13 +182,19 @@ class Mirror:
 
 class FindBestTracksParams:
     lib: UserLibrary
-    ref_track_ids: {}
-    ref_track_isrcs: {}
-    ref_track_artists: {}
+    ref_tracks: TracksCollection
     min_not_listened: int
     min_listened: int
     min_ref_percentage: int
     min_ref_tracks: int
+
+    def __init__(self, lib: UserLibrary):
+        self.lib = lib
+        self.ref_tracks = TracksCollection()
+        self.min_not_listened = 0
+        self.min_listened = 0
+        self.min_ref_percentage = 0
+        self.min_ref_tracks = 0
 
 
 def read_mirrors(group: str = None) -> List[Mirror]:
@@ -852,60 +900,14 @@ def get_subscriptions_info(sub_playlist_ids: List[str]) -> List[SubscriptionInfo
     return infos
 
 
-def __add_listened_track_to_lib(lib: UserLibrary, tags):
-    if 'SPOTIFY_TRACK_ID' in tags:
-        id = tags['SPOTIFY_TRACK_ID']
-        lib.listened_track_ids[id] = None
-
-    if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
-        isrc = tags['ISRC']
-        lib.listened_track_isrcs[isrc] = {}
-        artists = str.split(tags['ARTIST'], ';')
-        for artist in artists:
-            if artist not in lib.listened_track_artists:
-                lib.listened_track_artists[artist] = {}
-            lib.listened_track_artists[artist][tags['TITLE']] = None
-            lib.listened_track_isrcs[isrc][artist] = tags['TITLE']
-
-
-def __add_fav_track_to_lib(lib: UserLibrary, tags):
-    playlist_name = tags['SPOTY_PLAYLIST_NAME']
-    if 'SPOTIFY_TRACK_ID' in tags:
-        id = tags['SPOTIFY_TRACK_ID']
-        lib.fav_track_ids[id] = playlist_name
-        if playlist_name not in lib.fav_playlists_by_ids:
-            lib.fav_playlists_by_ids[playlist_name] = {}
-        lib.fav_playlists_by_ids[playlist_name][id] = None
-
-    if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
-        isrc = tags['ISRC']
-        title = tags['TITLE']
-        artists = str.split(tags['ARTIST'], ';')
-        lib.fav_track_isrcs[isrc] = {}
-        for artist in artists:
-            if artist not in lib.fav_track_artists:
-                lib.fav_track_artists[artist] = {}
-            if title not in lib.fav_track_artists[artist]:
-                lib.fav_track_artists[artist][title] = {}
-            lib.fav_track_artists[artist][title] = playlist_name
-
-            lib.fav_track_isrcs[isrc][artist] = {}
-            lib.fav_track_isrcs[isrc][artist][title] = playlist_name
-
-            if playlist_name not in lib.fav_playlists_by_isrc:
-                lib.fav_playlists_by_isrc[playlist_name] = {}
-            lib.fav_playlists_by_isrc[playlist_name][isrc] = None
-
-
 def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_listened=True) -> UserLibrary:
     lib = UserLibrary()
 
     lib.mirrors = read_mirrors(mirror_group)
     lib.subscribed_playlist_ids = get_subscribed_playlist_ids(lib.mirrors)
 
-    lib.listened_tracks = read_listened_tracks()
-    for tags in lib.listened_tracks:
-        __add_listened_track_to_lib(lib, tags)
+    listened_tracks = read_listened_tracks()
+    lib.listened_tracks.add_tracks(listened_tracks)
 
     # if len(lib.mirrors) == 0:
     #     click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
@@ -936,12 +938,8 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
             fav_playlist_ids.append(playlist['id'])
 
     # read fav playlists from spotify
-    lib.fav_tracks, fav_tags, lib.fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
-
-    for tags in fav_tags:
-        __add_fav_track_to_lib(lib, tags)
-        if add_fav_to_listened:
-            __add_listened_track_to_lib(lib, tags)
+    fav_tracks, fav_tags, lib.fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
+    lib.fav_tracks.add_tracks(fav_tags)
 
     return lib
 
@@ -1332,28 +1330,11 @@ def cache_find_best2(lib: UserLibrary, ref_playlist_ids: List[str]) -> List[Play
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
 
     infos = []
+    ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
 
-    ref_tracks, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
+    params = FindBestTracksParams(lib)
+    params.ref_tracks.add_tracks(ref_tags)
 
-    params = FindBestTracksParams()
-    params.lib = lib
-
-    params.ref_track_ids = {}
-    params.ref_track_isrcs = {}
-    params.ref_track_artists = {}
-    for tags in ref_tags:
-        if 'SPOTIFY_TRACK_ID' in tags:
-            id = tags['SPOTIFY_TRACK_ID']
-            params.ref_track_ids[id] = None
-        if 'ARTIST' in tags and 'TITLE' in tags:
-            artists = str.split(tags['ARTIST'], ';')
-            for artist in artists:
-                if artist not in params.ref_track_artists:
-                    params.ref_track_artists[artist] = {}
-                params.ref_track_artists[artist][tags['TITLE']] = tags['SPOTY_PLAYLIST_NAME']
-        if 'ISRC' in tags:
-            isrc = tags['ISRC']
-            params.ref_track_isrcs[isrc] = None
 
     unique_tracks = {}
     total_tracks_count = 0
