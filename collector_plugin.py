@@ -59,20 +59,36 @@ REDUCE_IF_NOT_UPDATED_DAYS = settings.COLLECTOR.REDUCE_IF_NOT_UPDATED_DAYS
 
 
 class UserLibrary:
-    mirrors: []
-    subscribed_playlist_ids: []
-    all_playlists: []
-    fav_playlist_ids: []
-    listened_tracks: []
-    listened_track_ids: {}
-    listened_track_isrcs: {}
-    listened_track_artists: {}
-    fav_tracks: []
-    fav_track_ids: {}
-    fav_track_isrcs: {}
-    fav_track_artists: {}
-    fav_playlists_by_ids: {}
-    fav_playlists_by_isrc: {}
+    mirrors: List
+    subscribed_playlist_ids: List
+    all_playlists: List
+    fav_playlist_ids: List
+    listened_tracks: List
+    listened_track_ids: dict
+    listened_track_isrcs: dict
+    listened_track_artists: dict
+    fav_tracks: List
+    fav_track_ids: dict
+    fav_track_isrcs: dict
+    fav_track_artists: dict
+    fav_playlists_by_ids: dict
+    fav_playlists_by_isrc: dict
+
+    def __init__(self):
+        self.mirrors = []
+        self.subscribed_playlist_ids = []
+        self.all_playlists = []
+        self.fav_playlist_ids = []
+        self.listened_tracks = []
+        self.listened_track_ids = {}
+        self.listened_track_isrcs = {}
+        self.listened_track_artists = {}
+        self.fav_tracks = []
+        self.fav_track_ids = {}
+        self.fav_track_isrcs = {}
+        self.fav_track_artists = {}
+        self.fav_playlists_by_ids = {}
+        self.fav_playlists_by_isrc = {}
 
 
 class FavPlaylistInfo:
@@ -104,7 +120,17 @@ class PlaylistInfo:
     ref_tracks_by_playlists: dict
     ref_percentage: float
     points: float
-
+    def __init__(self):
+        self.tracks_count= 0
+        self.tracks_list= []
+        self.listened_tracks_count= 0
+        self.fav_tracks_count= 0
+        self.fav_tracks_by_playlists= {}
+        self.fav_percentage= 0
+        self.ref_tracks_count= 0
+        self.ref_tracks_by_playlists={}
+        self.ref_percentage= 0
+        self.points= 0
 
 class Mirror:
     group: str
@@ -883,9 +909,7 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
     lib.subscribed_playlist_ids = get_subscribed_playlist_ids(lib.mirrors)
 
     lib.listened_tracks = read_listened_tracks()
-    lib.listened_track_ids = {}
-    lib.listened_track_isrcs = {}
-    lib.listened_track_artists = {}
+
     for tags in lib.listened_tracks:
         __add_listened_track_to_lib(lib, tags)
 
@@ -917,11 +941,6 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
 
     fav_tracks, fav_tags, fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
 
-    lib.fav_track_isrcs = {}
-    lib.fav_track_ids = {}
-    lib.fav_track_artists = {}
-    lib.fav_playlists_by_ids = {}
-    lib.fav_playlists_by_isrc = {}
     lib.fav_playlist_ids = fav_playlist_ids
     lib.fav_tracks = fav_tracks
     for tags in fav_tags:
@@ -1283,14 +1302,6 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     track_isrcs = playlist['tracks']
 
     info = PlaylistInfo()
-    info.listened_tracks_count = 0
-    info.fav_tracks_count = 0
-    info.fav_tracks_by_playlists = {}
-    info.fav_percentage = 0
-    info.ref_tracks_count = 0
-    info.ref_tracks_by_playlists = {}
-    info.ref_percentage = 0
-    info.points = 0
 
     for isrc in track_isrcs:
         if isrc in params.lib.listened_track_isrcs:
@@ -1459,14 +1470,6 @@ def __get_playlist_info_thread2(csv_filenames, params: FindBestTracksParams, cou
 
 def __get_playlist_info2(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     info = PlaylistInfo()
-    info.listened_tracks_count = 0
-    info.fav_tracks_count = 0
-    info.fav_tracks_by_playlists = {}
-    info.fav_percentage = 0
-    info.ref_tracks_count = 0
-    info.ref_tracks_by_playlists = {}
-    info.ref_percentage = 0
-    info.points = 0
 
     playlist_isrcs = playlist['isrcs']
     playlist_artists = playlist['artists']
