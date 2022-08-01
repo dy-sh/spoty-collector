@@ -15,8 +15,6 @@ import numpy as np
 import time
 import sys
 
-THREADS_COUNT = 12
-
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
 settings_file_name = os.path.join(current_directory, 'settings.toml')
@@ -40,6 +38,8 @@ cache_dir = os.path.join(current_directory, 'cache')
 listened_file_name = os.path.abspath(listened_file_name)
 mirrors_file_name = os.path.abspath(mirrors_file_name)
 cache_dir = os.path.abspath(cache_dir)
+
+THREADS_COUNT = settings.COLLECTOR.THREADS_COUNT
 
 LISTENED_LIST_TAGS = [
     'SPOTY_LENGTH',
