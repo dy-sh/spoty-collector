@@ -1161,8 +1161,8 @@ def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tra
     result.put(res)
 
 
-def cache_find_most_matches_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
-                                min_ref_percentage=0, min_ref_tracks=1):
+def cache_find_ref_nuber(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
+                         min_ref_percentage=0, min_ref_tracks=1):
     params = FindBestTracksParams(lib)
     ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
     params.ref_tracks.add_tracks(ref_tags)
