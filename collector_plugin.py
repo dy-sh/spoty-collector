@@ -15,7 +15,7 @@ import numpy as np
 import time
 import sys
 
-THREADS_COUNT = 12
+THREADS_COUNT = 1
 
 current_directory = os.path.dirname(os.path.realpath(__file__))
 # config_path = os.path.abspath(os.path.join(current_directory, '..', 'config'))
@@ -73,7 +73,6 @@ class UserLibrary:
     fav_track_artists: {}
     fav_playlists_by_ids: {}
     fav_playlists_by_isrc: {}
-    fav_playlists_by_artists: {}
 
 
 class FavPlaylistInfo:
@@ -827,6 +826,51 @@ def get_subscriptions_info(sub_playlist_ids: List[str]) -> List[SubscriptionInfo
     return infos
 
 
+def __add_listened_track_to_lib(lib: UserLibrary, tags):
+    if 'SPOTIFY_TRACK_ID' in tags:
+        id = tags['SPOTIFY_TRACK_ID']
+        lib.listened_track_ids[id] = None
+
+    if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
+        isrc = tags['ISRC']
+        lib.listened_track_isrcs[isrc] = {}
+        artists = str.split(tags['ARTIST'], ';')
+        for artist in artists:
+            if artist not in lib.listened_track_artists:
+                lib.listened_track_artists[artist] = {}
+            lib.listened_track_artists[artist][tags['TITLE']] = None
+            lib.listened_track_isrcs[isrc][artist] = tags['TITLE']
+
+
+def __add_fav_track_to_lib(lib: UserLibrary, tags):
+    playlist_name = tags['SPOTY_PLAYLIST_NAME']
+    if 'SPOTIFY_TRACK_ID' in tags:
+        id = tags['SPOTIFY_TRACK_ID']
+        lib.fav_track_ids[id] = playlist_name
+        if playlist_name not in lib.fav_playlists_by_ids:
+            lib.fav_playlists_by_ids[playlist_name] = {}
+        lib.fav_playlists_by_ids[playlist_name][id] = None
+
+    if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
+        isrc = tags['ISRC']
+        title = tags['TITLE']
+        artists = str.split(tags['ARTIST'], ';')
+        lib.fav_track_isrcs[isrc] = {}
+        for artist in artists:
+            if artist not in lib.fav_track_artists:
+                lib.fav_track_artists[artist] = {}
+            if title not in lib.fav_track_artists[artist]:
+                lib.fav_track_artists[artist][title] = {}
+            lib.fav_track_artists[artist][title] = playlist_name
+
+            lib.fav_track_isrcs[isrc][artist] = {}
+            lib.fav_track_isrcs[isrc][artist][title] = playlist_name
+
+            if playlist_name not in lib.fav_playlists_by_isrc:
+                lib.fav_playlists_by_isrc[playlist_name] = {}
+            lib.fav_playlists_by_isrc[playlist_name][isrc] = None
+
+
 def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_listened=True) -> UserLibrary:
     lib = UserLibrary()
 
@@ -843,18 +887,7 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
     lib.listened_track_isrcs = {}
     lib.listened_track_artists = {}
     for tags in lib.listened_tracks:
-        if 'SPOTIFY_TRACK_ID' in tags:
-            id = tags['SPOTIFY_TRACK_ID']
-            lib.listened_track_ids[id] = None
-        if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
-            isrc = tags['ISRC']
-            lib.listened_track_isrcs[isrc] = {}
-            artists = str.split(tags['ARTIST'], ';')
-            for artist in artists:
-                if artist not in lib.listened_track_artists:
-                    lib.listened_track_artists[artist] = {}
-                lib.listened_track_artists[artist][tags['TITLE']] = None
-                lib.listened_track_isrcs[isrc][artist] = tags['TITLE']
+        __add_listened_track_to_lib(lib, tags)
 
     if len(lib.listened_tracks) == 0:
         click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
@@ -889,43 +922,12 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
     lib.fav_track_artists = {}
     lib.fav_playlists_by_ids = {}
     lib.fav_playlists_by_isrc = {}
-    lib.fav_playlists_by_artists = {}
     lib.fav_playlist_ids = fav_playlist_ids
     lib.fav_tracks = fav_tracks
     for tags in fav_tags:
-        playlist_name = tags['SPOTY_PLAYLIST_NAME']
-        if 'SPOTIFY_TRACK_ID' in tags:
-            id = tags['SPOTIFY_TRACK_ID']
-            lib.fav_track_ids[id] = playlist_name
-            if playlist_name not in lib.fav_playlists_by_ids:
-                lib.fav_playlists_by_ids[playlist_name] = {}
-            lib.fav_playlists_by_ids[playlist_name][id] = None
-            if add_fav_to_listened:
-                lib.listened_track_ids[id] = None
-        if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
-            isrc = tags['ISRC']
-            title = tags['TITLE']
-            lib.fav_track_isrcs[isrc] = {}
-            artists = str.split(tags['ARTIST'], ';')
-            for artist in artists:
-                if artist not in lib.fav_track_artists:
-                    lib.fav_track_artists[artist] = {}
-                if title not in lib.fav_track_artists[artist]:
-                    lib.fav_track_artists[artist][title] = {}
-                lib.fav_track_artists[artist][title] = playlist_name
-                if add_fav_to_listened:
-                    if artist not in lib.listened_track_artists:
-                        lib.listened_track_artists[artist] = {}
-                    lib.listened_track_artists[artist][title] = playlist_name
-
-                lib.fav_track_isrcs[isrc][artist] = {}
-                lib.fav_track_isrcs[isrc][artist][title] = playlist_name
-
-                if playlist_name not in lib.fav_playlists_by_isrc:
-                    lib.fav_playlists_by_isrc[playlist_name] = {}
-                lib.fav_playlists_by_isrc[playlist_name][isrc] = None
-                if add_fav_to_listened:
-                    lib.listened_track_isrcs[isrc] = None
+        __add_fav_track_to_lib(lib, tags)
+        if add_fav_to_listened:
+            __add_listened_track_to_lib(lib, tags)
 
     return lib
 
