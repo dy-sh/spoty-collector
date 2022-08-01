@@ -901,26 +901,24 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
     lib = UserLibrary()
 
     lib.mirrors = read_mirrors(mirror_group)
-
-    if len(lib.mirrors) == 0:
-        click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
-        exit()
-
     lib.subscribed_playlist_ids = get_subscribed_playlist_ids(lib.mirrors)
 
     lib.listened_tracks = read_listened_tracks()
-
     for tags in lib.listened_tracks:
         __add_listened_track_to_lib(lib, tags)
 
-    if len(lib.listened_tracks) == 0:
-        click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
-        exit()
+    # if len(lib.mirrors) == 0:
+    #     click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
+    #     exit()
+    #
+    # if len(lib.listened_tracks) == 0:
+    #     click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
+    #     exit()
 
     lib.all_playlists = spotify_api.get_list_of_playlists()
 
+    # find fav playlists from spotify
     fav_playlist_ids = []
-
     if filter_names is None:
         if len(PLAYLISTS_WITH_FAVORITES) < 1:
             click.echo('No favorites playlists specified. Edit "PLAYLISTS_WITH_FAVORITES" field in settings.toml file '
@@ -933,16 +931,13 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
                     fav_playlist_ids.append(playlist['id'])
     else:
         playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
-
-        # playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), lib.all_playlists))
         click.echo(f'{len(playlists)}/{len(lib.all_playlists)} playlists matches the regex filter')
         for playlist in playlists:
             fav_playlist_ids.append(playlist['id'])
 
-    fav_tracks, fav_tags, fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
+    # read fav playlists from spotify
+    lib.fav_tracks, fav_tags, lib.fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
 
-    lib.fav_playlist_ids = fav_playlist_ids
-    lib.fav_tracks = fav_tracks
     for tags in fav_tags:
         __add_fav_track_to_lib(lib, tags)
         if add_fav_to_listened:
