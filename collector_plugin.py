@@ -1349,13 +1349,26 @@ def __is_track_exist_in_collection(col: TracksCollection, id=None, isrc=None, ar
     return False
 
 
-def __get_playlist_names(col: TracksCollection, isrc):
-    if isrc in col.track_isrcs:
+def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None, title=None):
+    result = {}
+    if id is not None and id in col.track_ids:
+        for artist in col.track_ids[id]:
+            for title in col.track_ids[id][artist]:
+                playlist_names = col.track_ids[id][artist][title]
+                result |= playlist_names
+    elif isrc is not None and isrc in col.track_isrcs:
         for artist in col.track_isrcs[isrc]:
             for title in col.track_isrcs[isrc][artist]:
                 playlist_names = col.track_isrcs[isrc][artist][title]
-                return playlist_names
-    return None
+                result |= playlist_names
+    elif artists is not None and title is not None:
+        for artist in artists:
+            if artist in col.track_artists:
+                if title in col.track_artists[artist]:
+                    playlist_names = col.track_artists[artist][title]
+                    result |= playlist_names
+
+    return result
 
 
 def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
@@ -1380,24 +1393,22 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
         # check if favorite
         if __is_track_exist_in_collection(params.lib.fav_tracks, None, isrc, artists, title):
             info.fav_tracks_count += 1
-            playlist_names = __get_playlist_names(params.lib.fav_tracks, isrc)
-            if playlist_names is not None:
-                for playlist_name in playlist_names:
-                    if playlist_name in info.fav_tracks_by_playlists:
-                        info.fav_tracks_by_playlists[playlist_name] += 1
-                    else:
-                        info.fav_tracks_by_playlists[playlist_name] = 1
+            playlist_names = __get_playlist_names(params.lib.fav_tracks, None, isrc, artists, title)
+            for playlist_name in playlist_names:
+                if playlist_name in info.fav_tracks_by_playlists:
+                    info.fav_tracks_by_playlists[playlist_name] += 1
+                else:
+                    info.fav_tracks_by_playlists[playlist_name] = 1
 
         # check if reference
         if __is_track_exist_in_collection(params.ref_tracks, None, isrc, artists, title):
             info.ref_tracks_count += 1
-            playlist_names = __get_playlist_names(params.ref_tracks, isrc)
-            if playlist_names is not None:
-                for playlist_name in playlist_names:
-                    if playlist_name in info.ref_tracks_by_playlists:
-                        info.ref_tracks_by_playlists[playlist_name] += 1
-                    else:
-                        info.ref_tracks_by_playlists[playlist_name] = 1
+            playlist_names = __get_playlist_names(params.ref_tracks, None, isrc, artists, title)
+            for playlist_name in playlist_names:
+                if playlist_name in info.ref_tracks_by_playlists:
+                    info.ref_tracks_by_playlists[playlist_name] += 1
+                else:
+                    info.ref_tracks_by_playlists[playlist_name] = 1
 
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
