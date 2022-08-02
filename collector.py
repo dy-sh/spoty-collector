@@ -576,6 +576,9 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
 
 
 def print_playlist_infos(infos: List[PlaylistInfo], limit: int = None):
+    if len(infos) == 0:
+        click.echo(f'No playlists found matching the query.')
+
     if limit is None:
         limit = len(infos)
     for i, info in enumerate(infos):
@@ -591,7 +594,7 @@ def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None
 
     click.echo(f'Playlist        : "{info.playlist_name}" ({info.playlist_id})')
     click.echo(f'Tracks total    : {info.tracks_count}')
-    click.echo(f'Tracks listened : {info.listened_tracks_count}')
+    click.echo(f'Tracks listened : {info.listened_tracks_count} ({info.listened_percentage:.1f}%)')
     click.echo(f'Favorite tracks : {info.fav_tracks_count} ({info.fav_percentage:.1f}%)')
     click.echo(f'Ref tracks      : {info.ref_tracks_count} ({info.ref_percentage:.1f}%)')
     click.echo(f'Points          : {info.points}')
@@ -680,7 +683,7 @@ Cache playlist with specified id (save to csv files on disk).
     click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
 
 
-@collector.command("cache-find-ref-number")
+@collector.command("cache-find-best-ref")
 @click.option('--min-listened', '--ml', type=int, default=0, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
 @click.option('--min-not-listened', '--mnl', type=int, default=0, show_default=True,
@@ -691,8 +694,19 @@ Cache playlist with specified id (save to csv files on disk).
               help='Skip the playlist if the number reference tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of printed playlists.')
+@click.option('--sorting', '--s', default="fav-percentage",
+              type=click.Choice(
+                  ['fav-number', 'fav-percentage',
+                   'ref-number', 'ref-percentage',
+                   'list-number', 'list-percentage',
+                   'track-number', 'points'],
+                  case_sensitive=False),
+              help='Sort resulting list by selected value.')
+@click.option('--reverse-sorting', '-r', is_flag=True,
+              help='Reverse sorting.')
 @click.argument('filter-names')
-def cache_find_ref_nuber(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks):
+def cache_find_best_ref(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
+                        sorting, reverse_sorting):
     """
 Among the cached playlists, find those that contain the most tracks from the reference list.
 As a parameter, pass a regular expression containing the names of playlists from the user library.
@@ -703,31 +717,72 @@ These playlists will be used as a reference list.
     for playlist in lib.all_playlists:
         if re.findall(filter_names, playlist['name']):
             ref_playlist_ids.append(playlist['id'])
-    infos, tracks_total, unique_tracks = col.cache_find_ref_nuber(lib, ref_playlist_ids, min_not_listened, min_listened,
-                                                                  min_ref_percentage, min_ref_tracks)
+    if len(ref_playlist_ids) == 0:
+        click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
+        exit()
+    infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
+                                                                 min_ref_percentage, min_ref_tracks, sorting,
+                                                                 reverse_sorting)
     print_playlist_infos(infos, limit)
 
 
-
-
-@collector.command("cache-find-best-ref")
+@collector.command("cache-find-best-ref-id")
+@click.option('--min-listened', '--ml', type=int, default=0, show_default=True,
+              help='Skip the playlist if the number of listened tracks is less than the given value.')
+@click.option('--min-not-listened', '--mnl', type=int, default=0, show_default=True,
+              help='Skip the playlist if the number of not listened tracks is less than the given value.')
+@click.option('--min-ref-percentage', '--mrp', type=int, default=0, show_default=True,
+              help='Skip the playlist if the number reference percentage is less than the given value.')
+@click.option('--min-ref-tracks', '--mrt', type=int, default=1, show_default=True,
+              help='Skip the playlist if the number reference tracks is less than the given value.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of printed playlists.')
-@click.argument('filter-names')
-def cache_find_best_ref(filter_names, limit):
+@click.option('--sorting', '--s', default="fav-percentage",
+              type=click.Choice(
+                  ['fav-number', 'fav-percentage',
+                   'ref-number', 'ref-percentage',
+                   'list-number', 'list-percentage',
+                   'track-number', 'points'],
+                  case_sensitive=False),
+              help='Sort resulting list by selected value.')
+@click.option('--reverse-sorting', '-r', is_flag=True,
+              help='Reverse sorting.')
+@click.argument("playlist_ids", nargs=-1)
+def cache_find_best_ref_id(playlist_ids, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
+                        sorting, reverse_sorting):
     """
-Find best from cached playlists.
-As a parameter, pass a regular expression containing the names of playlists from the user library.
+Among the cached playlists, find those that contain the most tracks from the reference list.
+Provide playlist IDs or  URIs as argument to get playlists from user library.
 These playlists will be used as a reference list.
     """
     lib = col.get_user_library()
-    ref_playlist_ids = []
-    for playlist in lib.all_playlists:
-        if re.findall(filter_names, playlist['name']):
-            ref_playlist_ids.append(playlist['id'])
-    infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids)
+    ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+    if len(ref_playlist_ids) == 0:
+        click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
+        exit()
+    infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
+                                                                 min_ref_percentage, min_ref_tracks, sorting,
+                                                                 reverse_sorting)
     print_playlist_infos(infos, limit)
 
+# @collector.command("cache-find-best-ref")
+# @click.option('--limit', type=int, default=1000, show_default=True,
+#               help='Limit the number of printed playlists.')
+# @click.argument('filter-names')
+# def cache_find_best_ref(filter_names, limit):
+#     """
+# Find best from cached playlists.
+# As a parameter, pass a regular expression containing the names of playlists from the user library.
+# These playlists will be used as a reference list.
+#     """
+#     lib = col.get_user_library()
+#     ref_playlist_ids = []
+#     for playlist in lib.all_playlists:
+#         if re.findall(filter_names, playlist['name']):
+#             ref_playlist_ids.append(playlist['id'])
+#     infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids)
+#     print_playlist_infos(infos, limit)
+#
 
 
 @collector.command("cache-stats")

@@ -153,6 +153,7 @@ class PlaylistInfo:
     tracks_count: int
     tracks_list: List
     listened_tracks_count: int
+    listened_percentage: int
     fav_tracks_count: int
     fav_tracks_by_playlists: dict
     fav_percentage: float
@@ -165,6 +166,7 @@ class PlaylistInfo:
         self.tracks_count = 0
         self.tracks_list = []
         self.listened_tracks_count = 0
+        self.listened_percentage = 0
         self.fav_tracks_count = 0
         self.fav_tracks_by_playlists = {}
         self.fav_percentage = 0
@@ -188,6 +190,7 @@ class FindBestTracksParams:
     min_ref_percentage: int
     min_ref_tracks: int
     calculate_points: bool
+    sorting: str
 
     def __init__(self, lib: UserLibrary):
         self.lib = lib
@@ -197,6 +200,7 @@ class FindBestTracksParams:
         self.min_ref_percentage = 0
         self.min_ref_tracks = 0
         self.calculate_points = False
+        self.sorting = "none"
 
 
 def read_mirrors(group: str = None) -> List[Mirror]:
@@ -1161,8 +1165,14 @@ def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tra
     result.put(res)
 
 
-def cache_find_ref_nuber(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
-                         min_ref_percentage=0, min_ref_tracks=1):
+def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
+                        min_ref_percentage=0, min_ref_tracks=1, sorting="fav-number", reverse_sorting=False):
+    playlist_ids = []
+    for ref_playlist_ids in ref_playlist_ids:
+        playlist_id = spotify_api.parse_playlist_id(ref_playlist_ids)
+        playlist_ids.append(playlist_id)
+    ref_playlist_ids = playlist_ids
+
     params = FindBestTracksParams(lib)
     ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
     params.ref_tracks.add_tracks(ref_tags)
@@ -1170,19 +1180,35 @@ def cache_find_ref_nuber(lib: UserLibrary, ref_playlist_ids: List[str], min_not_
     params.min_listened = min_listened
     params.min_ref_percentage = min_ref_percentage
     params.min_ref_tracks = min_ref_tracks
+    params.sorting = sorting
     infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
-    infos = sorted(infos, key=lambda x: x.ref_tracks_count)
+    if sorting == "fav-number":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_tracks_count)
+    elif sorting == "fav-percentage":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_percentage)
+    elif sorting == "ref-number":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.ref_tracks_count)
+    elif sorting == "ref-percentage":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.ref_percentage)
+    elif sorting == "list-number":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.listened_tracks_count)
+    elif sorting == "list-percentage":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.listened_percentage)
+    elif sorting == "track-number":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.tracks_count)
+    elif sorting == "points":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.points)
     return infos, total_tracks_count, unique_tracks
 
 
-def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str]) -> List[PlaylistInfo]:
-    params = FindBestTracksParams(lib)
-    ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
-    params.ref_tracks.add_tracks(ref_tags)
-    params.calculate_points = True
-    infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
-    infos = sorted(infos, key=lambda x: x.points)
-    return infos, total_tracks_count, unique_tracks
+# def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str]) -> List[PlaylistInfo]:
+#     params = FindBestTracksParams(lib)
+#     ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
+#     params.ref_tracks.add_tracks(ref_tags)
+#     params.calculate_points = True
+#     infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
+#     infos = sorted(infos, key=lambda x: x.points)
+#     return infos, total_tracks_count, unique_tracks
 
 
 def __find_cached_playlists(params: FindBestTracksParams) -> [List[PlaylistInfo], int, int]:
@@ -1366,6 +1392,7 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
         info.ref_percentage = info.ref_tracks_count / info.listened_tracks_count * 100
+        info.listened_percentage = info.listened_tracks_count / info.tracks_count * 100
 
     if params.calculate_points:
         info.points = info.ref_percentage + info.fav_percentage
