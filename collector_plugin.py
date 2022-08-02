@@ -197,7 +197,6 @@ class FindBestTracksParams:
     min_listened: int
     min_ref_percentage: int
     min_ref_tracks: int
-    calculate_points: bool
     sorting: str
 
     def __init__(self, lib: UserLibrary):
@@ -207,7 +206,6 @@ class FindBestTracksParams:
         self.min_listened = 0
         self.min_ref_percentage = 0
         self.min_ref_tracks = 0
-        self.calculate_points = False
         self.sorting = "none"
 
 
@@ -1387,11 +1385,13 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
             title = playlist_isrcs[isrc][artist]
 
         # check if listened
-        if __is_track_exist_in_collection(params.lib.listened_tracks, None, isrc, artists, title):
+        is_listened = __is_track_exist_in_collection(params.lib.listened_tracks, None, isrc, artists, title)
+        if is_listened:
             info.listened_tracks_count += 1
 
         # check if favorite
-        if __is_track_exist_in_collection(params.lib.fav_tracks, None, isrc, artists, title):
+        is_fav = __is_track_exist_in_collection(params.lib.fav_tracks, None, isrc, artists, title)
+        if is_fav:
             info.fav_tracks_count += 1
             playlist_names = __get_playlist_names(params.lib.fav_tracks, None, isrc, artists, title)
             for playlist_name in playlist_names:
@@ -1401,7 +1401,8 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
                     info.fav_tracks_by_playlists[playlist_name] = 1
 
         # check if reference
-        if __is_track_exist_in_collection(params.ref_tracks, None, isrc, artists, title):
+        is_ref = __is_track_exist_in_collection(params.ref_tracks, None, isrc, artists, title)
+        if is_ref:
             info.ref_tracks_count += 1
             playlist_names = __get_playlist_names(params.ref_tracks, None, isrc, artists, title)
             for playlist_name in playlist_names:
@@ -1410,12 +1411,17 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
                 else:
                     info.ref_tracks_by_playlists[playlist_name] = 1
 
+        # calculate points
+        p = 0
+        if is_ref:
+            p += 1
+        if is_listened and not is_fav and not is_ref:
+            p -= 1
+        info.points += p
+
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
         info.ref_percentage = info.ref_tracks_count / info.listened_tracks_count * 100
         info.listened_percentage = info.listened_tracks_count / info.tracks_count * 100
-
-    if params.calculate_points:
-        info.points = info.ref_percentage + info.fav_percentage
 
     return info
