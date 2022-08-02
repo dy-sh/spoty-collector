@@ -87,8 +87,10 @@ class TracksCollection:
 
         if 'SPOTIFY_TRACK_ID' in tags:
             id = tags['SPOTIFY_TRACK_ID']
-            self.track_ids[id] = playlist_name
+            if id not in self.track_ids:
+                self.track_ids[id] = {}
             if playlist_name is not None:
+                self.track_ids[id][playlist_name] = None
                 if playlist_name not in self.playlists_by_ids:
                     self.playlists_by_ids[playlist_name] = {}
                 self.playlists_by_ids[playlist_name][id] = None
@@ -97,16 +99,22 @@ class TracksCollection:
             isrc = tags['ISRC']
             title = tags['TITLE']
             artists = str.split(tags['ARTIST'], ';')
-            self.track_isrcs[isrc] = {}
+            if isrc not in self.track_isrcs:
+                self.track_isrcs[isrc] = {}
             for artist in artists:
                 if artist not in self.track_artists:
                     self.track_artists[artist] = {}
                 if title not in self.track_artists[artist]:
                     self.track_artists[artist][title] = {}
-                self.track_artists[artist][title] = playlist_name
+                if playlist_name is not None:
+                    self.track_artists[artist][title][playlist_name] = None
 
-                self.track_isrcs[isrc][artist] = {}
-                self.track_isrcs[isrc][artist][title] = playlist_name
+                if artist not in self.track_isrcs[isrc]:
+                    self.track_isrcs[isrc][artist] = {}
+                if title not in self.track_isrcs[isrc][artist]:
+                    self.track_isrcs[isrc][artist][title] = {}
+                if playlist_name is not None:
+                    self.track_isrcs[isrc][artist][title][playlist_name] = None
 
                 if playlist_name is not None:
                     if playlist_name not in self.playlists_by_isrc:
@@ -1341,12 +1349,12 @@ def __is_track_exist_in_collection(col: TracksCollection, id=None, isrc=None, ar
     return False
 
 
-def __get_playlist_name(col: TracksCollection, isrc):
+def __get_playlist_names(col: TracksCollection, isrc):
     if isrc in col.track_isrcs:
         for artist in col.track_isrcs[isrc]:
             for title in col.track_isrcs[isrc][artist]:
-                playlist_name = col.track_isrcs[isrc][artist][title]
-                return playlist_name
+                playlist_names = col.track_isrcs[isrc][artist][title]
+                return playlist_names
     return None
 
 
@@ -1372,22 +1380,24 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
         # check if favorite
         if __is_track_exist_in_collection(params.lib.fav_tracks, None, isrc, artists, title):
             info.fav_tracks_count += 1
-            playlist_name = __get_playlist_name(params.lib.fav_tracks, isrc)
-            if playlist_name is not None:
-                if playlist_name in info.fav_tracks_by_playlists:
-                    info.fav_tracks_by_playlists[playlist_name] += 1
-                else:
-                    info.fav_tracks_by_playlists[playlist_name] = 1
+            playlist_names = __get_playlist_names(params.lib.fav_tracks, isrc)
+            if playlist_names is not None:
+                for playlist_name in playlist_names:
+                    if playlist_name in info.fav_tracks_by_playlists:
+                        info.fav_tracks_by_playlists[playlist_name] += 1
+                    else:
+                        info.fav_tracks_by_playlists[playlist_name] = 1
 
         # check if reference
         if __is_track_exist_in_collection(params.ref_tracks, None, isrc, artists, title):
             info.ref_tracks_count += 1
-            playlist_name = __get_playlist_name(params.ref_tracks, isrc)
-            if playlist_name is not None:
-                if playlist_name in info.ref_tracks_by_playlists:
-                    info.ref_tracks_by_playlists[playlist_name] += 1
-                else:
-                    info.ref_tracks_by_playlists[playlist_name] = 1
+            playlist_names = __get_playlist_names(params.ref_tracks, isrc)
+            if playlist_names is not None:
+                for playlist_name in playlist_names:
+                    if playlist_name in info.ref_tracks_by_playlists:
+                        info.ref_tracks_by_playlists[playlist_name] += 1
+                    else:
+                        info.ref_tracks_by_playlists[playlist_name] = 1
 
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
