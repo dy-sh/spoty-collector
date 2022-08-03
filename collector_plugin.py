@@ -1247,7 +1247,7 @@ def __find_cached_playlists(params: FindBestTracksParams) -> [List[PlaylistInfo]
                     base_name = str.split(base_name, ' - ')[1]
                 except:
                     base_name = str.split(base_name, ' -')[1]
-                if re.search(params.filter_names, base_name):
+                if re.search(params.filter_names.upper(), base_name.upper()):
                     filterd_csvs.append(file_name)
         click.echo(f'{len(filterd_csvs)}/{len(csvs_in_path)} playlists matches the regex filter')
         csvs_in_path = filterd_csvs
@@ -1399,18 +1399,43 @@ def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None
     return result
 
 
-def __calculate_points(params, isrc, artists, title, is_ref, is_listened, is_fav):
-    if is_ref:
-        return 1
-    if is_listened and not is_fav and not is_ref:
-        return -1
+
+
+def __calculate_track_points(params: FindBestTracksParams, isrc, artists, title, is_ref, is_listened, is_fav):
+    p = 0
+    if is_fav:
+        p += 1
+    if is_listened and not is_fav:
+        p += -1
     if not is_listened:
+        # artist rating 0, result -1
+        # artist rating 0.1, result -0.7
+        # artist rating 0.2, result -0.4
+        # artist rating 0.3, result -0.1
+        # artist rating 0.4, result 0.2
+        # artist rating 0.5, result 0.5
+        # artist rating 0.6, result 0.8
+        # artist rating >=0.7, result 1
+        ar = 0
         for artist in artists:
             if artist in params.lib.artists_rating:
                 rating = params.lib.artists_rating[artist]
-                if rating < 0.1:
-                    return -1
-    return 0
+                ar += np.interp(rating, [0, 1], [-1, 2])
+        ar = np.clip(ar, -1, 1)
+        p += ar
+    return p
+
+
+def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
+    if info.tracks_count > 0:
+        info.points = info.points / info.tracks_count
+    info.points = info.points * (info.ref_percentage / 100)
+    info.points *= 100
+
+    # reduce points for small and not listened playlists (<100)
+    tracks_mult = np.interp(info.listened_tracks_count, [0, 100], [0, 1])
+    np.clip(tracks_mult, 0, 1)
+    info.points *= tracks_mult
 
 
 def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
@@ -1456,11 +1481,15 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
                     info.ref_tracks_by_playlists[playlist_name] = 1
 
         # calculate points
-        info.points += __calculate_points(params, isrc, artists, title, is_ref, is_listened, is_fav)
+        info.points += __calculate_track_points(params, isrc, artists, title, is_ref, is_listened, is_fav)
+
 
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
         info.ref_percentage = info.ref_tracks_count / info.listened_tracks_count * 100
         info.listened_percentage = info.listened_tracks_count / info.tracks_count * 100
+
+    __calculate_playlist_points(params, info)
+    info.points = round(info.points, 2)
 
     return info
