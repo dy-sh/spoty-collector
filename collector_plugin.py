@@ -129,6 +129,7 @@ class UserLibrary:
     fav_playlist_ids: List
     listened_tracks: TracksCollection
     fav_tracks: TracksCollection
+    artists_rating: dict
 
     def __init__(self):
         self.mirrors = []
@@ -137,6 +138,7 @@ class UserLibrary:
         self.fav_playlist_ids = []
         self.listened_tracks = TracksCollection()
         self.fav_tracks = TracksCollection()
+        self.artists_rating = {}
 
 
 class FavPlaylistInfo:
@@ -913,6 +915,16 @@ def get_subscriptions_info(sub_playlist_ids: List[str]) -> List[SubscriptionInfo
     return infos
 
 
+def __calculate_artists_rating(lib: UserLibrary):
+    for artist in lib.listened_tracks.track_artists:
+        list_tracks_num = len(lib.listened_tracks.track_artists[artist])
+        fav_tracks_num = 0
+        if artist in lib.fav_tracks.track_artists:
+            fav_tracks_num = len(lib.fav_tracks.track_artists[artist])
+        rating = fav_tracks_num / list_tracks_num
+        lib.artists_rating[artist] = rating
+
+
 def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_listened=True) -> UserLibrary:
     lib = UserLibrary()
 
@@ -956,6 +968,8 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
 
     if add_fav_to_listened:
         lib.listened_tracks.add_tracks(fav_tags)
+
+    __calculate_artists_rating(lib)
 
     return lib
 
@@ -1318,16 +1332,16 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
         playlist['id'] = playlist_id
         playlist['name'] = playlist_name
         playlist['isrcs'] = {}
-        playlist['artists'] = {}
+        # playlist['artists'] = {}
         for tag in tags:
             if 'ISRC' in tag and 'ARTIST' in tag and 'TITLE' in tag:
                 artists = str.split(tag['ARTIST'], ';')
                 playlist['isrcs'][tag['ISRC']] = {}
                 for artist in artists:
                     playlist['isrcs'][tag['ISRC']][artist] = tag['TITLE']
-                    if artist not in playlist['artists']:
-                        playlist['artists'][artist] = {}
-                    playlist['artists'][artist][tag['TITLE']] = None
+                    # if artist not in playlist['artists']:
+                    #     playlist['artists'][artist] = {}
+                    # playlist['artists'][artist][tag['TITLE']] = None
 
         info = __get_playlist_info(params, playlist)
 
@@ -1341,10 +1355,6 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
                     if params.min_ref_percentage <= 0 or info.ref_percentage >= params.min_ref_percentage:
                         if params.min_ref_tracks <= 0 or info.ref_tracks_count >= params.min_ref_tracks:
                             infos.append(info)
-
-        # if info is not None:
-        #     if info.points > 0:
-        #         infos.append(info)
 
         if (i + 1) % 100 == 0:
             counter.value += 100
@@ -1389,12 +1399,18 @@ def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None
     return result
 
 
-def __calculate_points(is_ref, is_listened, is_fav):
-    p = 0
+def __calculate_points(params, isrc, artists, title, is_ref, is_listened, is_fav):
     if is_ref:
-        p += 1
+        return 1
     if is_listened and not is_fav and not is_ref:
-        p -= 1
+        return -1
+    if not is_listened:
+        for artist in artists:
+            if artist in params.lib.artists_rating:
+                rating = params.lib.artists_rating[artist]
+                if rating < 0.1:
+                    return -1
+    return 0
 
 
 def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
@@ -1402,7 +1418,7 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     info.playlist_name = playlist['name']
     info.playlist_id = playlist['id']
     playlist_isrcs = playlist['isrcs']
-    playlist_artists = playlist['artists']
+    # playlist_artists = playlist['artists']
     info.tracks_count = len(playlist_isrcs)
 
     for isrc in playlist_isrcs:
@@ -1440,7 +1456,7 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
                     info.ref_tracks_by_playlists[playlist_name] = 1
 
         # calculate points
-        info.points += __calculate_points(is_ref, is_listened, is_fav)
+        info.points += __calculate_points(params, isrc, artists, title, is_ref, is_listened, is_fav)
 
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
