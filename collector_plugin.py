@@ -1389,6 +1389,14 @@ def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None
     return result
 
 
+def __calculate_points(is_ref, is_listened, is_fav):
+    p = 0
+    if is_ref:
+        p += 1
+    if is_listened and not is_fav and not is_ref:
+        p -= 1
+
+
 def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     info = PlaylistInfo()
     info.playlist_name = playlist['name']
@@ -1432,12 +1440,7 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
                     info.ref_tracks_by_playlists[playlist_name] = 1
 
         # calculate points
-        p = 0
-        if is_ref:
-            p += 1
-        if is_listened and not is_fav and not is_ref:
-            p -= 1
-        info.points += p
+        info.points += __calculate_points(is_ref, is_listened, is_fav)
 
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
