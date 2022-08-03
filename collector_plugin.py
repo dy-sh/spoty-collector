@@ -198,6 +198,7 @@ class FindBestTracksParams:
     min_ref_percentage: int
     min_ref_tracks: int
     sorting: str
+    filter_names: str
 
     def __init__(self, lib: UserLibrary):
         self.lib = lib
@@ -1172,7 +1173,8 @@ def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tra
 
 
 def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
-                        min_ref_percentage=0, min_ref_tracks=1, sorting="fav-number", reverse_sorting=False):
+                        min_ref_percentage=0, min_ref_tracks=1, sorting="fav-number", reverse_sorting=False,
+                        filter_names=None):
     playlist_ids = []
     for ref_playlist_ids in ref_playlist_ids:
         playlist_id = spotify_api.parse_playlist_id(ref_playlist_ids)
@@ -1187,6 +1189,7 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     params.min_ref_percentage = min_ref_percentage
     params.min_ref_tracks = min_ref_tracks
     params.sorting = sorting
+    params.filter_names = filter_names
     infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
     if sorting == "fav-number":
         infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_tracks_count)
@@ -1219,6 +1222,23 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
 
 def __find_cached_playlists(params: FindBestTracksParams) -> [List[PlaylistInfo], int, int]:
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+
+    if params.filter_names is not None:
+        filterd_csvs = []
+        with click.progressbar(csvs_in_path, label=f'Filtering cached playlists') as bar:
+            for file_name in bar:
+                base_name = os.path.basename(file_name)
+                base_name = os.path.splitext(base_name)[0]
+                try:
+                    base_name = str.split(base_name, ' - ')[1]
+                except:
+                    base_name = str.split(base_name, ' -')[1]
+                if re.search(params.filter_names, base_name):
+                    filterd_csvs.append(file_name)
+        click.echo(f'{len(filterd_csvs)}/{len(csvs_in_path)} playlists matches the regex filter')
+        csvs_in_path = filterd_csvs
+        if len(csvs_in_path) == 0:
+            exit()
 
     infos = []
 
