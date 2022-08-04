@@ -103,78 +103,78 @@ def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False):
     return new_playlists, exist_playlists, cached_playlists
 
 
-def get_cached_playlists(use_library_dir=False):
-    read_dir = library_cache_dir if use_library_dir else cache_dir
-    playlists = []
-    csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
-    # multi thread
-    try:
-        parts = np.array_split(csvs_in_path, THREADS_COUNT)
-        threads = []
-        counters = []
-        results = Queue()
+# def get_cached_playlists(use_library_dir=False):
+#     read_dir = library_cache_dir if use_library_dir else cache_dir
+#     playlists = []
+#     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
+#     # multi thread
+#     try:
+#         parts = np.array_split(csvs_in_path, THREADS_COUNT)
+#         threads = []
+#         counters = []
+#         results = Queue()
+#
+#         with click.progressbar(length=len(csvs_in_path), label=f'Reading {len(csvs_in_path)} cached playlists') as bar:
+#             # start threads
+#             for i, part in enumerate(parts):
+#                 counter = Value('i', 0)
+#                 counters.append(counter)
+#                 csvs_in_path = list(part)
+#                 thread = Process(target=__read_csvs_thread, args=(csvs_in_path, counter, results))
+#                 threads.append(thread)
+#                 thread.daemon = True  # This thread dies when main thread exits
+#                 thread.start()
+#
+#                 # update bar
+#                 total = sum([x.value for x in counters])
+#                 added = total - bar.pos
+#                 if added > 0:
+#                     bar.update(added)
+#
+#             # waiting for complete
+#             while not bar.finished:
+#                 time.sleep(0.1)
+#                 total = sum([x.value for x in counters])
+#                 added = total - bar.pos
+#                 if added > 0:
+#                     bar.update(added)
+#
+#             # combine results
+#             for i in range(len(parts)):
+#                 res = results.get()
+#                 playlists.extend(res)
+#
+#     except (KeyboardInterrupt, SystemExit):  # aborted by user
+#         click.echo()
+#         click.echo('Aborted.')
+#         sys.exit()
+#     return playlists
 
-        with click.progressbar(length=len(csvs_in_path), label=f'Reading {len(csvs_in_path)} cached playlists') as bar:
-            # start threads
-            for i, part in enumerate(parts):
-                counter = Value('i', 0)
-                counters.append(counter)
-                csvs_in_path = list(part)
-                thread = Process(target=read_csvs_thread, args=(csvs_in_path, counter, results))
-                threads.append(thread)
-                thread.daemon = True  # This thread dies when main thread exits
-                thread.start()
 
-                # update bar
-                total = sum([x.value for x in counters])
-                added = total - bar.pos
-                if added > 0:
-                    bar.update(added)
-
-            # waiting for complete
-            while not bar.finished:
-                time.sleep(0.1)
-                total = sum([x.value for x in counters])
-                added = total - bar.pos
-                if added > 0:
-                    bar.update(added)
-
-            # combine results
-            for i in range(len(parts)):
-                res = results.get()
-                playlists.extend(res)
-
-    except (KeyboardInterrupt, SystemExit):  # aborted by user
-        click.echo()
-        click.echo('Aborted.')
-        sys.exit()
-    return playlists
-
-
-def read_csvs_thread(filenames, counter, result):
-    res = []
-
-    for i, file_name in enumerate(filenames):
-        base_name = os.path.basename(file_name)
-        base_name = os.path.splitext(base_name)[0]
-        playlist_id = str.split(base_name, ' - ')[0]
-        try:
-            playlist_name = str.split(base_name, ' - ')[1]
-        except:
-            playlist_name = "Unknown"
-        tags = csv_playlist.read_tags_from_csv_fast(file_name,
-                                                    ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED', 'SPOTIFY_TRACK_ID'])
-        pl = {}
-        pl['id'] = playlist_id
-        pl['name'] = playlist_name
-        pl['tracks'] = tags
-        res.append(pl)
-
-        if (i + 1) % 10 == 0:
-            counter.value += 10
-        if i + 1 == len(filenames):
-            counter.value += (i % 10) + 1
-    result.put(res)
+# def __read_csvs_thread(filenames, counter, result):
+#     res = []
+#
+#     for i, file_name in enumerate(filenames):
+#         base_name = os.path.basename(file_name)
+#         base_name = os.path.splitext(base_name)[0]
+#         playlist_id = str.split(base_name, ' - ')[0]
+#         try:
+#             playlist_name = str.split(base_name, ' - ')[1]
+#         except:
+#             playlist_name = "Unknown"
+#         tags = csv_playlist.read_tags_from_csv_fast(file_name,
+#                                                     ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED', 'SPOTIFY_TRACK_ID'])
+#         pl = {}
+#         pl['id'] = playlist_id
+#         pl['name'] = playlist_name
+#         pl['tracks'] = tags
+#         res.append(pl)
+#
+#         if (i + 1) % 10 == 0:
+#             counter.value += 10
+#         if i + 1 == len(filenames):
+#             counter.value += (i % 10) + 1
+#     result.put(res)
 
 
 def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
@@ -199,7 +199,7 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     params.fav_weight = fav_weight
     params.ref_weight = ref_weight
     params.prob_weight = prob_weight
-    infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
+    infos, total_tracks_count, unique_tracks = find_cached_playlists(params)
     if sorting == "fav-number":
         infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_tracks_count)
     elif sorting == "fav-percentage":
@@ -225,17 +225,7 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     return infos, total_tracks_count, unique_tracks
 
 
-# def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str]) -> List[PlaylistInfo]:
-#     params = FindBestTracksParams(lib)
-#     ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
-#     params.ref_tracks.add_tracks(ref_tags)
-#     params.calculate_points = True
-#     infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
-#     infos = sorted(infos, key=lambda x: x.points)
-#     return infos, total_tracks_count, unique_tracks
-
-
-def __find_cached_playlists(params: FindBestTracksParams, use_library_dir=False) -> [List[PlaylistInfo], int, int]:
+def find_cached_playlists(params: FindBestTracksParams, use_library_dir=False) -> [List[PlaylistInfo], int, int]:
     read_dir = library_cache_dir if use_library_dir else cache_dir
     click.echo("Reading cache playlists directory")
     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
