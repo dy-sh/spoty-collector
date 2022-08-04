@@ -1,5 +1,6 @@
 import spoty.plugins.collector.collector_plugin as col
-from spoty.plugins.collector.collector_plugin import SubscriptionInfo, PlaylistInfo
+import spoty.plugins.collector.collector_cache as cache
+from spoty.plugins.collector.collector_classes import *
 import spoty.utils
 from spoty import spotify_api
 from spoty import csv_playlist
@@ -642,7 +643,7 @@ Find best public playlist by specified search query.
                 continue
         new_playlists.append(playlist)
 
-    lib = col.get_user_library(True)
+    lib = col.get_user_library()
     infos = []
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
@@ -671,7 +672,7 @@ def cache_by_name(search_query, limit):
 Find public playlists by specified search query and cache them (save to csv files on disk).
     """
 
-    new, old, all_old = col.cache_by_name(search_query, limit)
+    new, old, all_old = cache.cache_by_name(search_query, limit)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
@@ -687,7 +688,7 @@ Cache playlist with specified id (save to csv files on disk).
     """
 
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new, old, all_old = col.cache_by_ids(playlist_ids)
+    new, old, all_old = cache.cache_by_ids(playlist_ids)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
@@ -761,7 +762,7 @@ These playlists will be used as a reference list.
     if len(ref_playlist_ids) == 0:
         click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
         exit()
-    infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
+    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
                                                                  min_ref_percentage, min_ref_tracks, sorting,
                                                                  reverse_sorting, filter_names, listened_accuracy,
                                                                  fav_weight, ref_weight, prob_weight)
@@ -773,7 +774,7 @@ These playlists will be used as a reference list.
             click.echo("\nAborted")
             exit()
         click.echo("\n")
-        col.sub_top_playlists_from_cache(infos, subscribe_count, subscribe_group)
+        cache.sub_top_playlists_from_cache(infos, subscribe_count, subscribe_group)
 
 
 @collector.command("cache-find-best-ref-id")
@@ -824,7 +825,7 @@ These playlists will be used as a reference list.
     """
     lib = col.get_user_library()
     ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
+    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
                                                                  min_ref_percentage, min_ref_tracks, sorting,
                                                                  reverse_sorting, filter_names, listened_accuracy,
                                                                  fav_weight, ref_weight, prob_weight)
@@ -838,7 +839,7 @@ def cache_unsub(group_names):
 Unsubscribe from subscribed from cache playlist. Delete all mirrors in the library.
     """
     group_names = spoty.utils.tuple_to_list(group_names)
-    col.unsub_playlists_from_cache(group_names)
+    cache.unsub_playlists_from_cache(group_names)
 
 
 @collector.command("cache-stats")
@@ -846,8 +847,28 @@ def cache_stats():
     """
 Cached playlists statistics
     """
-    infos, tracks_total, unique_tracks = col.cache_find_best_ref("-----IGNORE-----", 0, 0, 0, 0, True)
+    infos, tracks_total, unique_tracks = cache.cache_find_best_ref("-----IGNORE-----", 0, 0, 0, 0, True)
     click.echo("\n======================================================================\n")
     click.echo(f'Cached playlists: {len(infos)}')
     click.echo(f'Tracks total in playlists: {tracks_total}')
     click.echo(f'Total unique tracks: {len(unique_tracks)}')
+
+
+@collector.command("cache-library")
+def cache_user_library():
+    """
+Cache user library to reduce the number of requests to spotify.
+Use --cache-library-delete to delete cached library and continue to make requests to the library.
+    """
+    num = cache.cache_user_library()
+    click.echo(f'Cached playlists: {num}')
+
+
+@collector.command("cache-library-delete")
+def cache_library_delete():
+    """
+Delete cached library and continue to make requests to the library.
+Use --cache-library to cache playlists.
+    """
+    cache.cache_library_delete()
+    click.echo(f'Cached library deleted')

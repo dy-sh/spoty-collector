@@ -1,4 +1,6 @@
 from datetime import datetime
+import spoty.plugins.collector.collector_cache as cache
+from spoty.plugins.collector.collector_classes import *
 
 from spoty import plugins_path
 from spoty import spotify_api
@@ -33,11 +35,9 @@ if listened_file_name.startswith("./") or listened_file_name.startswith(".\\"):
 if mirrors_file_name.startswith("./") or mirrors_file_name.startswith(".\\"):
     mirrors_file_name = os.path.join(current_directory, mirrors_file_name)
 
-cache_dir = os.path.join(current_directory, 'cache')
 
 listened_file_name = os.path.abspath(listened_file_name)
 mirrors_file_name = os.path.abspath(mirrors_file_name)
-cache_dir = os.path.abspath(cache_dir)
 
 THREADS_COUNT = settings.COLLECTOR.THREADS_COUNT
 
@@ -56,177 +56,6 @@ REDUCE_PERCENTAGE_OF_GOOD_TRACKS = settings.COLLECTOR.REDUCE_PERCENTAGE_OF_GOOD_
 REDUCE_MINIMUM_LISTENED_TRACKS = settings.COLLECTOR.REDUCE_MINIMUM_LISTENED_TRACKS
 REDUCE_IGNORE_PLAYLISTS = settings.COLLECTOR.REDUCE_IGNORE_PLAYLISTS
 REDUCE_IF_NOT_UPDATED_DAYS = settings.COLLECTOR.REDUCE_IF_NOT_UPDATED_DAYS
-
-
-class TracksCollection:
-    tracks: List
-    track_ids: dict
-    track_isrcs: dict
-    track_artists: dict
-    playlists_by_isrc: dict
-    playlists_by_ids: dict
-
-    def __init__(self):
-        self.tracks = []
-        self.track_ids = {}
-        self.track_isrcs = {}
-        self.track_artists = {}
-        self.playlists_by_isrc = {}
-        self.playlists_by_ids = {}
-
-    def add_tracks(self, tags_list: List):
-        for tags in tags_list:
-            self.add_track(tags)
-
-    def add_track(self, tags: dict):
-        self.tracks.append(tags)
-
-        playlist_name = None
-        if 'SPOTY_PLAYLIST_NAME' in tags:
-            playlist_name = tags['SPOTY_PLAYLIST_NAME']
-
-        if 'SPOTIFY_TRACK_ID' in tags:
-            id = tags['SPOTIFY_TRACK_ID']
-            if id not in self.track_ids:
-                self.track_ids[id] = {}
-            if playlist_name is not None:
-                self.track_ids[id][playlist_name] = None
-                if playlist_name not in self.playlists_by_ids:
-                    self.playlists_by_ids[playlist_name] = {}
-                self.playlists_by_ids[playlist_name][id] = None
-
-        if 'ISRC' in tags and 'ARTIST' in tags and 'TITLE' in tags:
-            isrc = tags['ISRC']
-            title = tags['TITLE']
-            artists = str.split(tags['ARTIST'], ';')
-            if isrc not in self.track_isrcs:
-                self.track_isrcs[isrc] = {}
-            for artist in artists:
-                if artist not in self.track_artists:
-                    self.track_artists[artist] = {}
-                if title not in self.track_artists[artist]:
-                    self.track_artists[artist][title] = {}
-                if playlist_name is not None:
-                    self.track_artists[artist][title][playlist_name] = None
-
-                if artist not in self.track_isrcs[isrc]:
-                    self.track_isrcs[isrc][artist] = {}
-                if title not in self.track_isrcs[isrc][artist]:
-                    self.track_isrcs[isrc][artist][title] = {}
-                if playlist_name is not None:
-                    self.track_isrcs[isrc][artist][title][playlist_name] = None
-
-                if playlist_name is not None:
-                    if playlist_name not in self.playlists_by_isrc:
-                        self.playlists_by_isrc[playlist_name] = {}
-                    self.playlists_by_isrc[playlist_name][isrc] = None
-
-
-class UserLibrary:
-    mirrors: List
-    subscribed_playlist_ids: List
-    all_playlists: List
-    fav_playlist_ids: List
-    listened_tracks: TracksCollection
-    fav_tracks: TracksCollection
-    artists_rating: dict
-
-    def __init__(self):
-        self.mirrors = []
-        self.subscribed_playlist_ids = []
-        self.all_playlists = []
-        self.fav_playlist_ids = []
-        self.listened_tracks = TracksCollection()
-        self.fav_tracks = TracksCollection()
-        self.artists_rating = {}
-
-
-class FavPlaylistInfo:
-    playlist_name: str
-    tracks_count: int
-
-
-class SubscriptionInfo:
-    mirror_name: str = None
-    playlist: dict
-    tracks: List
-    listened_tracks: List
-    fav_tracks: List
-    fav_tracks_by_playlists: List[FavPlaylistInfo]
-    fav_percentage: float
-    last_update: datetime
-
-
-class PlaylistInfo:
-    playlist_name: str
-    playlist_id: str
-    tracks_count: int
-    tracks_list: List
-    listened_tracks_count: int
-    listened_percentage: int
-    fav_tracks_count: int
-    fav_tracks_by_playlists: dict
-    fav_percentage: float
-    ref_tracks_count: int
-    ref_tracks_by_playlists: dict
-    ref_percentage: float
-    prob_good_tracks_percentage: float
-    fav_points: float
-    ref_points: float
-    prob_points: float
-    points: float
-
-    def __init__(self):
-        self.tracks_count = 0
-        self.tracks_list = []
-        self.listened_tracks_count = 0
-        self.listened_percentage = 0
-        self.fav_tracks_count = 0
-        self.fav_tracks_by_playlists = {}
-        self.fav_percentage = 0
-        self.ref_tracks_count = 0
-        self.ref_tracks_by_playlists = {}
-        self.ref_percentage = 0
-        self.prob_good_tracks_percentage = 0
-        self.fav_points = 0
-        self.ref_points = 0
-        self.prob_points = 0
-        self.points = 0
-
-
-class Mirror:
-    playlist_id: str
-    from_cache: bool
-    group: str
-    mirror_name: str
-
-
-class FindBestTracksParams:
-    lib: UserLibrary
-    ref_tracks: TracksCollection
-    min_not_listened: int
-    min_listened: int
-    min_ref_percentage: int
-    min_ref_tracks: int
-    sorting: str
-    filter_names: str
-    listened_accuracy: int
-    fav_weight: float
-    ref_weight: float
-    prob_weight: float
-
-    def __init__(self, lib: UserLibrary):
-        self.lib = lib
-        self.ref_tracks = TracksCollection()
-        self.min_not_listened = 0
-        self.min_listened = 0
-        self.min_ref_percentage = 0
-        self.min_ref_tracks = 0
-        self.sorting = "none"
-        self.listened_accuracy = 100
-        self.fav_weight = 1
-        self.ref_weight = 1
-        self.prob_weight = 1
 
 
 def read_mirrors(group: str = None) -> List[Mirror]:
@@ -575,28 +404,7 @@ def list_playlists(fast=True, group: str = None):
     click.echo(f'Total {len(all_playlists)} subscribed playlists in {mirrors_count} mirrors.')
 
 
-def get_cached_playlists_dict():
-    click.echo("Reading cache playlists directory")
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
-    res = {}
 
-    with click.progressbar(length=len(csvs_in_path), label=f'Collecting cached playlists') as bar:
-        for i, file_name in enumerate(csvs_in_path):
-            base_name = os.path.basename(file_name)
-            base_name = os.path.splitext(base_name)[0]
-
-            if len(base_name) > 21:
-                id = base_name[:22]
-                name = base_name[23:]
-                res[id] = name
-            else:
-                click.echo("Invalid cached playlist file name: " + file_name)
-
-            if i % 1000 == 0:
-                bar.update(1000)
-        bar.finish()
-
-    return res
 
 
 def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=None):
@@ -645,7 +453,7 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
                 new_tracks = []
                 for m in mirrors:
                     if m.from_cache:
-                        sub_playlist = get_cached_playlists()
+                        sub_playlist = cache.get_cached_playlists()
                     else:
                         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
                         if sub_playlist is not None:
@@ -1111,125 +919,6 @@ def __get_subscription_info(sub_playlist_id: str, lib: UserLibrary, playlist=Non
     return info
 
 
-def cache_by_name(search_query, limit):
-    playlists = spotify_api.find_playlist_by_query(search_query, limit)
-    ids = []
-    for playlist in playlists:
-        ids.append(playlist['id'])
-
-    new, old, all_old = cache_by_ids(ids)
-    return new, old, all_old
-
-
-def cache_by_ids(playlist_ids):
-    cached_ids = []
-    cached_files = []
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
-    for full_name in csvs_in_path:
-        base_name = os.path.basename(full_name)
-        ext = os.path.splitext(base_name)[1]
-        base_name = os.path.splitext(base_name)[0]
-        dir_name = os.path.dirname(full_name)
-        playlist_id = str.split(base_name, ' - ')[0]
-        cached_ids.append(playlist_id)
-        cached_files.append(full_name)
-
-    new_playlists = []
-    exist_playlists = []
-    for playlist_id in playlist_ids:
-        if playlist_id in cached_ids:
-            exist_playlists.append(playlist_id)
-            continue
-        new_playlists.append(playlist_id)
-
-    with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
-        for playlist_id in bar:
-            playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
-            if playlist is None:
-                continue
-            tracks = playlist["tracks"]["items"]
-            tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
-            file_name = playlist['id'] + " - " + playlist['name']
-            if len(file_name) > 120:
-                file_name = (file_name[:120] + '..')
-            file_name = utils.slugify_file_pah(file_name) + '.csv'
-            cache_file_name = os.path.join(cache_dir, file_name)
-            csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
-
-    return new_playlists, exist_playlists, cached_ids
-
-
-def get_cached_playlists():
-    playlists = []
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
-    # multi thread
-    try:
-        parts = np.array_split(csvs_in_path, THREADS_COUNT)
-        threads = []
-        counters = []
-        results = Queue()
-
-        with click.progressbar(length=len(csvs_in_path), label=f'Reading {len(csvs_in_path)} cached playlists') as bar:
-            # start threads
-            for i, part in enumerate(parts):
-                counter = Value('i', 0)
-                counters.append(counter)
-                csvs_in_path = list(part)
-                thread = Process(target=read_csvs_thread, args=(csvs_in_path, counter, results))
-                threads.append(thread)
-                thread.daemon = True  # This thread dies when main thread exits
-                thread.start()
-
-                # update bar
-                total = sum([x.value for x in counters])
-                added = total - bar.pos
-                if added > 0:
-                    bar.update(added)
-
-            # waiting for complete
-            while not bar.finished:
-                time.sleep(0.1)
-                total = sum([x.value for x in counters])
-                added = total - bar.pos
-                if added > 0:
-                    bar.update(added)
-
-            # combine results
-            for i in range(len(parts)):
-                res = results.get()
-                playlists.extend(res)
-
-    except (KeyboardInterrupt, SystemExit):  # aborted by user
-        click.echo()
-        click.echo('Aborted.')
-        sys.exit()
-    return playlists
-
-
-def read_csvs_thread(filenames, counter, result):
-    res = []
-
-    for i, file_name in enumerate(filenames):
-        base_name = os.path.basename(file_name)
-        base_name = os.path.splitext(base_name)[0]
-        playlist_id = str.split(base_name, ' - ')[0]
-        try:
-            playlist_name = str.split(base_name, ' - ')[1]
-        except:
-            playlist_name = "Unknown"
-        tags = csv_playlist.read_tags_from_csv_fast(file_name,
-                                                    ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED', 'SPOTIFY_TRACK_ID'])
-        pl = {}
-        pl['id'] = playlist_id
-        pl['name'] = playlist_name
-        pl['tracks'] = tags
-        res.append(pl)
-
-        if (i + 1) % 10 == 0:
-            counter.value += 10
-        if i + 1 == len(filenames):
-            counter.value += (i % 10) + 1
-    result.put(res)
 
 
 def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tracks_dict, counter, result):
@@ -1245,6 +934,7 @@ def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tra
         if i + 1 == len(playlists):
             counter.value += (i % 100) + 1
     result.put(res)
+
 
 
 def playlist_info(lib, playlist_ids):
@@ -1278,325 +968,6 @@ def playlist_info(lib, playlist_ids):
         info = __get_playlist_info(params, playlist)
         infos.append(info)
     return infos
-
-
-def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
-                        min_ref_percentage=0, min_ref_tracks=1, sorting="fav-number", reverse_sorting=False,
-                        filter_names=None, listened_accuracy=100, fav_weight=1, ref_weight=1, prob_weight=1):
-    playlist_ids = []
-    for ref_playlist_ids in ref_playlist_ids:
-        playlist_id = spotify_api.parse_playlist_id(ref_playlist_ids)
-        playlist_ids.append(playlist_id)
-    ref_playlist_ids = playlist_ids
-
-    params = FindBestTracksParams(lib)
-    ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
-    params.ref_tracks.add_tracks(ref_tags)
-    params.min_not_listened = min_not_listened
-    params.min_listened = min_listened
-    params.min_ref_percentage = min_ref_percentage
-    params.min_ref_tracks = min_ref_tracks
-    params.sorting = sorting
-    params.filter_names = filter_names
-    params.listened_accuracy = listened_accuracy
-    params.fav_weight = fav_weight
-    params.ref_weight = ref_weight
-    params.prob_weight = prob_weight
-    infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
-    if sorting == "fav-number":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_tracks_count)
-    elif sorting == "fav-percentage":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_percentage)
-    elif sorting == "ref-number":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.ref_tracks_count)
-    elif sorting == "ref-percentage":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.ref_percentage)
-    elif sorting == "list-number":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.listened_tracks_count)
-    elif sorting == "list-percentage":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.listened_percentage)
-    elif sorting == "track-number":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.tracks_count)
-    elif sorting == "fav-points":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_points)
-    elif sorting == "ref-points":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.ref_points)
-    elif sorting == "prob-points":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.prob_points)
-    elif sorting == "points":
-        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.points)
-    return infos, total_tracks_count, unique_tracks
-
-
-# def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str]) -> List[PlaylistInfo]:
-#     params = FindBestTracksParams(lib)
-#     ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
-#     params.ref_tracks.add_tracks(ref_tags)
-#     params.calculate_points = True
-#     infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
-#     infos = sorted(infos, key=lambda x: x.points)
-#     return infos, total_tracks_count, unique_tracks
-
-
-def __find_cached_playlists(params: FindBestTracksParams) -> [List[PlaylistInfo], int, int]:
-    click.echo("Reading cache playlists directory")
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
-
-    if params.filter_names is not None:
-        filterd_csvs = []
-        with click.progressbar(length=len(csvs_in_path), label=f'Filtering cached playlists') as bar:
-            for i, file_name in enumerate(csvs_in_path):
-                base_name = os.path.basename(file_name)
-                base_name = os.path.splitext(base_name)[0]
-                if len(base_name) > 21:
-                    name = base_name[23:]
-                    if re.search(params.filter_names.upper(), name.upper()):
-                        filterd_csvs.append(file_name)
-                else:
-                    click.echo("Invalid cached playlist file name: " + file_name)
-                if i % 1000 == 0:
-                    bar.update(1000)
-        click.echo(f'{len(filterd_csvs)}/{len(csvs_in_path)} playlists matches the regex filter')
-        csvs_in_path = filterd_csvs
-        if len(csvs_in_path) == 0:
-            exit()
-
-    infos = []
-
-    unique_tracks = {}
-    total_tracks_count = 0
-
-    # multi thread
-    try:
-        parts = np.array_split(csvs_in_path, THREADS_COUNT)
-        threads = []
-        counters = []
-        results = Queue()
-
-        with click.progressbar(length=len(csvs_in_path),
-                               label=f'Collecting info for {len(csvs_in_path)} cached playlists') as bar:
-            # start threads
-            for i, part in enumerate(parts):
-                counter = Value('i', 0)
-                counters.append(counter)
-                playlists_part = list(part)
-                thread = Process(target=__get_playlist_info_thread,
-                                 args=(playlists_part, params, counter, results, False))
-                threads.append(thread)
-                thread.daemon = True  # This thread dies when main thread exits
-                thread.start()
-
-                # update bar
-                total = sum([x.value for x in counters])
-                added = total - bar.pos
-                if added > 0:
-                    bar.update(added)
-
-            # waiting for complete
-            while not bar.finished:
-                time.sleep(0.1)
-                total = sum([x.value for x in counters])
-                added = total - bar.pos
-                if added > 0:
-                    bar.update(added)
-
-        # combine results
-        with click.progressbar(parts, label=f'Processing the results') as bar:
-            for i in bar:
-                try:
-                    r = results.get()
-                    res = r[0]
-                    total_tracks_count += r[1]
-                    unique_tracks |= r[2]
-                    infos.extend(res)
-                except:
-                    click.echo("\nFailed to combine results.")
-
-    except (KeyboardInterrupt, SystemExit):  # aborted by user
-        click.echo()
-        click.echo('Aborted.')
-        sys.exit()
-
-    return infos, total_tracks_count, unique_tracks
-
-
-def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, counter, result, include_unique_tracks):
-    infos = []
-
-    unique_tracks = {}
-    total_tracks_count = 0
-
-    for i, file_name in enumerate(csv_filenames):
-        base_name = os.path.basename(file_name)
-        base_name = os.path.splitext(base_name)[0]
-        playlist_id = str.split(base_name, ' - ')[0]
-        try:
-            playlist_name = str.split(base_name, ' - ')[1]
-        except:
-            playlist_name = "Unknown"
-        tags = csv_playlist.read_tags_from_csv_fast(file_name, ['ISRC', 'ARTIST', 'TITLE'])
-        playlist = {}
-        playlist['id'] = playlist_id
-        playlist['name'] = playlist_name
-        playlist['isrcs'] = {}
-        # playlist['artists'] = {}
-        for tag in tags:
-            if 'ISRC' in tag and 'ARTIST' in tag and 'TITLE' in tag:
-                artists = str.split(tag['ARTIST'], ';')
-                playlist['isrcs'][tag['ISRC']] = {}
-                for artist in artists:
-                    playlist['isrcs'][tag['ISRC']][artist] = tag['TITLE']
-                    # if artist not in playlist['artists']:
-                    #     playlist['artists'][artist] = {}
-                    # playlist['artists'][artist][tag['TITLE']] = None
-
-        info = __get_playlist_info(params, playlist)
-
-        total_tracks_count += len(tags)
-        if include_unique_tracks:
-            unique_tracks |= tags
-
-        if info is not None:
-            if params.min_not_listened <= 0 or info.tracks_count - info.listened_tracks_count >= params.min_not_listened:
-                if params.min_listened <= 0 or info.listened_tracks_count >= params.min_listened:
-                    if params.min_ref_percentage <= 0 or info.ref_percentage >= params.min_ref_percentage:
-                        if params.min_ref_tracks <= 0 or info.ref_tracks_count >= params.min_ref_tracks:
-                            infos.append(info)
-
-        if (i + 1) % 100 == 0:
-            counter.value += 100
-        if i + 1 == len(csv_filenames):
-            counter.value += (i % 100) + 1
-    r = [infos, total_tracks_count, unique_tracks]
-    result.put(r)
-
-
-def __is_track_exist_in_collection(col: TracksCollection, id=None, isrc=None, artists=None, title=None):
-    if id is not None and id in col.track_ids:
-        return True
-    elif isrc is not None and isrc in col.track_isrcs:
-        return True
-    elif artists is not None and title is not None:
-        for artist in artists:
-            if artist in col.track_artists:
-                if title in col.track_artists[artist]:
-                    return True
-    return False
-
-
-def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None, title=None):
-    result = {}
-    if id is not None and id in col.track_ids:
-        for artist in col.track_ids[id]:
-            for title in col.track_ids[id][artist]:
-                playlist_names = col.track_ids[id][artist][title]
-                result |= playlist_names
-    elif isrc is not None and isrc in col.track_isrcs:
-        for artist in col.track_isrcs[isrc]:
-            for title in col.track_isrcs[isrc][artist]:
-                playlist_names = col.track_isrcs[isrc][artist][title]
-                result |= playlist_names
-    elif artists is not None and title is not None:
-        for artist in artists:
-            if artist in col.track_artists:
-                if title in col.track_artists[artist]:
-                    playlist_names = col.track_artists[artist][title]
-                    result |= playlist_names
-
-    return result
-
-
-def __get_prob_good_track_percentage(params: FindBestTracksParams, artists):
-    best = None
-    for artist in artists:
-        if artist in params.lib.artists_rating:
-            # artist rating:
-            # 0 = all tracks are bad
-            # 0.5 - 50% tracks is good
-            # 1 = all tracks are good
-            rating = params.lib.artists_rating[artist]
-            if best is None:
-                best = rating
-            elif rating > best:
-                best = rating
-        else:
-            if best is None or best < 0.5:  # if unknown artist
-                best = 0.5
-    if best is not None:
-        return best
-    return 0.5
-
-
-# def __calculate_track_points(params: FindBestTracksParams, artists, is_listened, is_fav, is_ref):
-#     p = 0
-#     if is_fav:
-#         p += 1
-#     if is_listened and not is_fav:
-#         p += -1
-#     if not is_listened:
-#         # artist rating 0, result -1
-#         # artist rating 0.1, result -0.7
-#         # artist rating 0.2, result -0.4
-#         # artist rating 0.3, result -0.1
-#         # artist rating 0.4, result 0.2
-#         # artist rating 0.5, result 0.5
-#         # artist rating 0.6, result 0.8
-#         # artist rating >=0.7, result 1
-#         ar = 0
-#         for artist in artists:
-#             if artist in params.lib.artists_rating:
-#                 rating = params.lib.artists_rating[artist]
-#                 ar += np.interp(rating, [0, 1], [-1, 2])
-#         ar = np.clip(ar, -1, 1)
-#         p += ar
-#     return p
-
-
-def __calculate_track_points(is_listened, is_fav, prob_good_or_bad):
-    if is_fav:
-        return 1
-    if is_listened and not is_fav:
-        return -1
-    return prob_good_or_bad
-
-
-def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
-    accuracy = np.interp(info.listened_tracks_count, [0, params.listened_accuracy], [0, 1])
-    info.fav_points = info.fav_percentage * accuracy
-    info.ref_points = info.ref_percentage * accuracy
-    info.prob_points = info.prob_good_tracks_percentage * accuracy
-
-    info.points = params.fav_weight * info.fav_points + \
-                  params.ref_weight * info.ref_points + \
-                  params.prob_weight * info.prob_points
-
-
-# def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
-#     # if info.tracks_count > 0:
-#     #     info.points = info.points / info.tracks_count
-#
-#     info.points = ((info.prob_good_percentage / 100) - (info.prob_bad_percentage / 100)) * (info.fav_percentage / 100)
-#     # info.points = info.points * (info.ref_percentage / 100)
-#
-#     # reduce points for small and not listened playlists (<100)
-#     known_tracks = info.listened_tracks_count + info.prob_good_tracks_count + info.prob_bad_tracks_count
-#     tracks_mult = np.interp(known_tracks, [0, 100], [0, 1])
-#     np.clip(tracks_mult, 0, 1)
-#     info.points *= tracks_mult
-#
-#     info.points *= 100
-
-
-# def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
-#     if info.tracks_count > 0:
-#         info.points = info.points / info.tracks_count
-#     info.points = info.points * (info.ref_percentage / 100)
-#     info.points *= 100
-#
-#     # reduce points for small and not listened playlists (<100)
-#     tracks_mult = np.interp(info.listened_tracks_count, [0, 100], [0, 1])
-#     np.clip(tracks_mult, 0, 1)
-#     info.points *= tracks_mult
 
 
 def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
@@ -1670,28 +1041,81 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     return info
 
 
-def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: str):
-    infos.reverse()
-    added_playlists = 0
-    small_tracks = 0
-    small_added = False
-    for info in infos:
-        if added_playlists >= count:
-            break
-        not_listened_count = info.tracks_count - info.listened_tracks_count
-        if not_listened_count < 20:
-            if small_tracks < 1000:
-                mirror_name = "++ " + group
-                subscribe([info.playlist_id], mirror_name, group, True, False)
-                small_tracks += not_listened_count
-                if not small_added:
-                    added_playlists += 1
-                    small_added = True
+
+def __calculate_track_points(is_listened, is_fav, prob_good_or_bad):
+    if is_fav:
+        return 1
+    if is_listened and not is_fav:
+        return -1
+    return prob_good_or_bad
+
+
+def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
+    accuracy = np.interp(info.listened_tracks_count, [0, params.listened_accuracy], [0, 1])
+    info.fav_points = info.fav_percentage * accuracy
+    info.ref_points = info.ref_percentage * accuracy
+    info.prob_points = info.prob_good_tracks_percentage * accuracy
+
+    info.points = params.fav_weight * info.fav_points + \
+                  params.ref_weight * info.ref_points + \
+                  params.prob_weight * info.prob_points
+
+
+
+
+def __is_track_exist_in_collection(col: TracksCollection, id=None, isrc=None, artists=None, title=None):
+    if id is not None and id in col.track_ids:
+        return True
+    elif isrc is not None and isrc in col.track_isrcs:
+        return True
+    elif artists is not None and title is not None:
+        for artist in artists:
+            if artist in col.track_artists:
+                if title in col.track_artists[artist]:
+                    return True
+    return False
+
+
+def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None, title=None):
+    result = {}
+    if id is not None and id in col.track_ids:
+        for artist in col.track_ids[id]:
+            for title in col.track_ids[id][artist]:
+                playlist_names = col.track_ids[id][artist][title]
+                result |= playlist_names
+    elif isrc is not None and isrc in col.track_isrcs:
+        for artist in col.track_isrcs[isrc]:
+            for title in col.track_isrcs[isrc][artist]:
+                playlist_names = col.track_isrcs[isrc][artist][title]
+                result |= playlist_names
+    elif artists is not None and title is not None:
+        for artist in artists:
+            if artist in col.track_artists:
+                if title in col.track_artists[artist]:
+                    playlist_names = col.track_artists[artist][title]
+                    result |= playlist_names
+
+    return result
+
+
+def __get_prob_good_track_percentage(params: FindBestTracksParams, artists):
+    best = None
+    for artist in artists:
+        if artist in params.lib.artists_rating:
+            # artist rating:
+            # 0 = all tracks are bad
+            # 0.5 - 50% tracks is good
+            # 1 = all tracks are good
+            rating = params.lib.artists_rating[artist]
+            if best is None:
+                best = rating
+            elif rating > best:
+                best = rating
         else:
-            mirror_name = "++ " + group + " - " + info.playlist_name
-            subscribe([info.playlist_id], mirror_name, group, True, True)
-            added_playlists += 1
+            if best is None or best < 0.5:  # if unknown artist
+                best = 0.5
+    if best is not None:
+        return best
+    return 0.5
 
 
-def unsub_playlists_from_cache(group: str):
-    pass
