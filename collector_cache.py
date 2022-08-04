@@ -82,7 +82,7 @@ def cache_by_name(search_query, limit, use_library_dir=False, overwrite_exist=Fa
     return new, old, all_old
 
 
-def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False):
+def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False):
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
     cached_playlists = get_cached_playlists_dict(use_library_dir)
@@ -110,7 +110,7 @@ def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False):
                 file_name = (file_name[:120] + '..')
             file_name = utils.slugify_file_pah(file_name) + '.csv'
             cache_file_name = os.path.join(read_dir, file_name)
-            csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
+            csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False, write_empty)
 
     return new_playlists, exist_playlists, cached_playlists
 
@@ -396,16 +396,21 @@ def unsub_playlists_from_cache(group: str):
     pass
 
 
-def cache_user_library():
+def cache_user_library(only_new=False):
     ids = []
     all_playlists = spotify_api.get_list_of_playlists()
     for playlist in all_playlists:
         ids.append(playlist['id'])
-    cache_by_ids(ids, True, True)
+    new_playlists, exist_playlists, cached_playlists = cache_by_ids(ids, True, not only_new, True)
+    return new_playlists, exist_playlists, cached_playlists
 
 
 def cache_library_delete():
     csvs_in_path = csv_playlist.find_csvs_in_path(library_cache_dir)
+
+    if len(csvs_in_path)==0:
+        click.echo(f"No cached playlists found.")
+        exit()
 
     click.confirm(f'Are you sure you want to delete {len(csvs_in_path)} cached user library playlists?', abort=True)
 

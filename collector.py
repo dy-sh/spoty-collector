@@ -861,13 +861,19 @@ Cached playlists statistics
 
 
 @collector.command("cache-library")
-def cache_user_library():
+@click.option('--only-new', '-n', is_flag=True,
+              help='Cache only new playlists. Skip already cached even if they have been updated.')
+def cache_user_library(only_new):
     """
 Cache user library to reduce the number of requests to spotify.
 Use --cache-library-delete to delete cached library and continue to make requests to the library.
     """
-    num = cache.cache_user_library()
-    click.echo(f'Cached playlists: {num}')
+    new, old, all_old = cache.cache_user_library(only_new)
+
+    click.echo("\n======================================================================\n")
+    click.echo(f'New cached playlists: {len(new)}')
+    click.echo(f'Skipped already cached playlists: {len(old)}')
+    click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
 
 
 @collector.command("cache-library-delete")
