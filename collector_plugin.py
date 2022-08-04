@@ -170,6 +170,10 @@ class PlaylistInfo:
     ref_tracks_count: int
     ref_tracks_by_playlists: dict
     ref_percentage: float
+    prob_good_tracks_percentage: float
+    fav_points: float
+    ref_points: float
+    prob_points: float
     points: float
 
     def __init__(self):
@@ -183,6 +187,10 @@ class PlaylistInfo:
         self.ref_tracks_count = 0
         self.ref_tracks_by_playlists = {}
         self.ref_percentage = 0
+        self.prob_good_tracks_percentage = 0
+        self.fav_points = 0
+        self.ref_points = 0
+        self.prob_points = 0
         self.points = 0
 
 
@@ -201,6 +209,10 @@ class FindBestTracksParams:
     min_ref_tracks: int
     sorting: str
     filter_names: str
+    listened_accuracy: int
+    fav_weight: float
+    ref_weight: float
+    prob_weight: float
 
     def __init__(self, lib: UserLibrary):
         self.lib = lib
@@ -210,6 +222,10 @@ class FindBestTracksParams:
         self.min_ref_percentage = 0
         self.min_ref_tracks = 0
         self.sorting = "none"
+        self.listened_accuracy = 100
+        self.fav_weight = 1
+        self.ref_weight = 1
+        self.prob_weight = 1
 
 
 def read_mirrors(group: str = None) -> List[Mirror]:
@@ -1186,9 +1202,42 @@ def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tra
     result.put(res)
 
 
+def playlist_info(lib, playlist_ids):
+    ids = []
+    for playlist_ids in playlist_ids:
+        playlist_id = spotify_api.parse_playlist_id(playlist_ids)
+        ids.append(playlist_id)
+    playlist_ids = ids
+
+    infos = []
+
+    for playlist_id in playlist_ids:
+        playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
+        if playlist is None:
+            click.echo(f'  Playlist "{playlist_id}" not found.')
+            continue
+
+        tracks = playlist["tracks"]["items"]
+        tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+
+        playlist['isrcs'] = {}
+        for tag in tags_list:
+            if 'ISRC' in tag and 'ARTIST' in tag and 'TITLE' in tag:
+                artists = str.split(tag['ARTIST'], ';')
+                playlist['isrcs'][tag['ISRC']] = {}
+                for artist in artists:
+                    playlist['isrcs'][tag['ISRC']][artist] = tag['TITLE']
+
+        params = FindBestTracksParams(lib)
+        # params.ref_tracks.add_tracks(tags_list)
+        info = __get_playlist_info(params, playlist)
+        infos.append(info)
+    return infos
+
+
 def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
                         min_ref_percentage=0, min_ref_tracks=1, sorting="fav-number", reverse_sorting=False,
-                        filter_names=None):
+                        filter_names=None, listened_accuracy=100, fav_weight=1, ref_weight=1, prob_weight=1):
     playlist_ids = []
     for ref_playlist_ids in ref_playlist_ids:
         playlist_id = spotify_api.parse_playlist_id(ref_playlist_ids)
@@ -1204,6 +1253,10 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     params.min_ref_tracks = min_ref_tracks
     params.sorting = sorting
     params.filter_names = filter_names
+    params.listened_accuracy = listened_accuracy
+    params.fav_weight = fav_weight
+    params.ref_weight = ref_weight
+    params.prob_weight = prob_weight
     infos, total_tracks_count, unique_tracks = __find_cached_playlists(params)
     if sorting == "fav-number":
         infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_tracks_count)
@@ -1219,6 +1272,12 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
         infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.listened_percentage)
     elif sorting == "track-number":
         infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.tracks_count)
+    elif sorting == "fav-points":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_points)
+    elif sorting == "ref-points":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.ref_points)
+    elif sorting == "prob-points":
+        infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.prob_points)
     elif sorting == "points":
         infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.points)
     return infos, total_tracks_count, unique_tracks
@@ -1399,43 +1458,97 @@ def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None
     return result
 
 
+def __get_prob_good_track_percentage(params: FindBestTracksParams, artists):
+    best = None
+    for artist in artists:
+        if artist in params.lib.artists_rating:
+            # artist rating:
+            # 0 = all tracks are bad
+            # 0.5 - 50% tracks is good
+            # 1 = all tracks are good
+            rating = params.lib.artists_rating[artist]
+            if best is None:
+                best = rating
+            elif rating > best:
+                best = rating
+        else:
+            if best is None or best < 0.5:  # if unknown artist
+                best = 0.5
+    if best is not None:
+        return best
+    return 0.5
 
 
-def __calculate_track_points(params: FindBestTracksParams, isrc, artists, title, is_ref, is_listened, is_fav):
-    p = 0
+# def __calculate_track_points(params: FindBestTracksParams, artists, is_listened, is_fav, is_ref):
+#     p = 0
+#     if is_fav:
+#         p += 1
+#     if is_listened and not is_fav:
+#         p += -1
+#     if not is_listened:
+#         # artist rating 0, result -1
+#         # artist rating 0.1, result -0.7
+#         # artist rating 0.2, result -0.4
+#         # artist rating 0.3, result -0.1
+#         # artist rating 0.4, result 0.2
+#         # artist rating 0.5, result 0.5
+#         # artist rating 0.6, result 0.8
+#         # artist rating >=0.7, result 1
+#         ar = 0
+#         for artist in artists:
+#             if artist in params.lib.artists_rating:
+#                 rating = params.lib.artists_rating[artist]
+#                 ar += np.interp(rating, [0, 1], [-1, 2])
+#         ar = np.clip(ar, -1, 1)
+#         p += ar
+#     return p
+
+
+def __calculate_track_points(is_listened, is_fav, prob_good_or_bad):
     if is_fav:
-        p += 1
+        return 1
     if is_listened and not is_fav:
-        p += -1
-    if not is_listened:
-        # artist rating 0, result -1
-        # artist rating 0.1, result -0.7
-        # artist rating 0.2, result -0.4
-        # artist rating 0.3, result -0.1
-        # artist rating 0.4, result 0.2
-        # artist rating 0.5, result 0.5
-        # artist rating 0.6, result 0.8
-        # artist rating >=0.7, result 1
-        ar = 0
-        for artist in artists:
-            if artist in params.lib.artists_rating:
-                rating = params.lib.artists_rating[artist]
-                ar += np.interp(rating, [0, 1], [-1, 2])
-        ar = np.clip(ar, -1, 1)
-        p += ar
-    return p
+        return -1
+    return prob_good_or_bad
 
 
 def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
-    if info.tracks_count > 0:
-        info.points = info.points / info.tracks_count
-    info.points = info.points * (info.ref_percentage / 100)
-    info.points *= 100
+    accuracy = np.interp(info.listened_tracks_count, [0, params.listened_accuracy], [0, 1])
+    info.fav_points = info.fav_percentage * accuracy
+    info.ref_points = info.ref_percentage * accuracy
+    info.prob_points = info.prob_good_tracks_percentage * accuracy
 
-    # reduce points for small and not listened playlists (<100)
-    tracks_mult = np.interp(info.listened_tracks_count, [0, 100], [0, 1])
-    np.clip(tracks_mult, 0, 1)
-    info.points *= tracks_mult
+    info.points = params.fav_weight * info.fav_points + \
+                  params.ref_weight * info.ref_points + \
+                  params.prob_weight * info.prob_points
+
+
+# def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
+#     # if info.tracks_count > 0:
+#     #     info.points = info.points / info.tracks_count
+#
+#     info.points = ((info.prob_good_percentage / 100) - (info.prob_bad_percentage / 100)) * (info.fav_percentage / 100)
+#     # info.points = info.points * (info.ref_percentage / 100)
+#
+#     # reduce points for small and not listened playlists (<100)
+#     known_tracks = info.listened_tracks_count + info.prob_good_tracks_count + info.prob_bad_tracks_count
+#     tracks_mult = np.interp(known_tracks, [0, 100], [0, 1])
+#     np.clip(tracks_mult, 0, 1)
+#     info.points *= tracks_mult
+#
+#     info.points *= 100
+
+
+# def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
+#     if info.tracks_count > 0:
+#         info.points = info.points / info.tracks_count
+#     info.points = info.points * (info.ref_percentage / 100)
+#     info.points *= 100
+#
+#     # reduce points for small and not listened playlists (<100)
+#     tracks_mult = np.interp(info.listened_tracks_count, [0, 100], [0, 1])
+#     np.clip(tracks_mult, 0, 1)
+#     info.points *= tracks_mult
 
 
 def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
@@ -1480,9 +1593,22 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
                 else:
                     info.ref_tracks_by_playlists[playlist_name] = 1
 
-        # calculate points
-        info.points += __calculate_track_points(params, isrc, artists, title, is_ref, is_listened, is_fav)
+        # is probably good or bad
+        prob_good_or_bad = 0
+        if not is_listened:
+            info.prob_good_tracks_percentage += __get_prob_good_track_percentage(params, artists)
+            pass
 
+        # calculate points
+        # info.points += __calculate_track_points(is_listened, is_fav, prob_good_or_bad)
+        # info.points += __calculate_track_points(params, artists, is_listened, is_fav, is_ref, prob_good_or_bad)
+
+    not_listened_count = info.tracks_count - info.listened_tracks_count
+    if not_listened_count > 0:
+        info.prob_good_tracks_percentage /= not_listened_count
+        info.prob_good_tracks_percentage *= 100
+    else:
+        info.prob_good_tracks_percentage = 50
 
     if info.listened_tracks_count != 0:
         info.fav_percentage = info.fav_tracks_count / info.listened_tracks_count * 100
@@ -1490,6 +1616,7 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
         info.listened_percentage = info.listened_tracks_count / info.tracks_count * 100
 
     __calculate_playlist_points(params, info)
-    info.points = round(info.points, 2)
+    info.fav_points = round(info.fav_points, 2)
+    info.ref_points = round(info.ref_points, 2)
 
     return info

@@ -592,16 +592,26 @@ def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None
     else:
         click.echo("\n======================================================================\n")
 
-    click.echo(f'Playlist        : "{info.playlist_name}" ({info.playlist_id})')
-    click.echo(f'Tracks total    : {info.tracks_count}')
-    click.echo(f'Tracks listened : {info.listened_tracks_count} ({info.listened_percentage:.1f}%)')
-    click.echo(f'Favorite tracks : {info.fav_tracks_count} ({info.fav_percentage:.1f}%)')
-    click.echo(f'Ref tracks      : {info.ref_tracks_count} ({info.ref_percentage:.1f}%)')
-    click.echo(f'Points          : {info.points}')
-    click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
-    srt = {k: v for k, v in sorted(info.ref_tracks_by_playlists.items(), key=lambda item: item[1], reverse=True)}
-    for pl_name in srt:
-        click.echo(f'{srt[pl_name]} : "{pl_name}"')
+    click.echo(f'Playlist         : "{info.playlist_name}" ({info.playlist_id})')
+    click.echo(f'Tracks total     : {info.tracks_count}')
+    click.echo(f'Tracks listened  : {info.listened_tracks_count} ({info.listened_percentage:.1f}%)')
+    click.echo(
+        f'Favorite tracks  : {info.fav_tracks_count} ({info.fav_percentage:.1f}%) ({info.fav_points:.1f} points)')
+    click.echo(f'Prob good tracks :    ({info.prob_good_tracks_percentage:.1f}%) ({info.prob_points:.1f} points)')
+    if info.ref_tracks_count > 0:
+        click.echo(
+            f'Ref tracks       : {info.ref_tracks_count} ({info.ref_percentage:.1f}%) ({info.ref_points:.1f} points)')
+    click.echo(f'Points           : {info.points:.1f}')
+    if len(info.ref_tracks_by_playlists) > 0:
+        click.echo(f'---------- (ref.tracks count : fav.playlist name) ----------')
+        srt = {k: v for k, v in sorted(info.ref_tracks_by_playlists.items(), key=lambda item: item[1], reverse=True)}
+        for pl_name in srt:
+            click.echo(f'{srt[pl_name]} : "{pl_name}"')
+    if len(info.fav_tracks_by_playlists) > 0:
+        click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
+        srt = {k: v for k, v in sorted(info.fav_tracks_by_playlists.items(), key=lambda item: item[1], reverse=True)}
+        for pl_name in srt:
+            click.echo(f'{srt[pl_name]} : "{pl_name}"')
 
 
 @collector.command("find-best")
@@ -692,6 +702,15 @@ Cache playlist with specified id (save to csv files on disk).
               help='Skip the playlist if the number reference percentage is less than the given value.')
 @click.option('--min-ref-tracks', '--mrt', type=int, default=1, show_default=True,
               help='Skip the playlist if the number reference tracks is less than the given value.')
+@click.option('--listened-accuracy', '--la', type=int, default=100, show_default=True,
+              help='The number of fav-points will decrease if the number of listened tracks is lower than the specified. '
+                   'Set it to 1000, for example, if you want to increase the fav-points accuracy and have longer playlists in the selection.')
+@click.option('--fav_weight', '--fw', type=float, default=1, show_default=True,
+              help='The weight of fav_points, which affects the final points score.')
+@click.option('--ref_weight', '--rw', type=float, default=1, show_default=True,
+              help='The weight of ref_points, which affects the final points score.')
+@click.option('--prob_weight', '--pw', type=float, default=1, show_default=True,
+              help='The weight of prob_points, which affects the final points score.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of printed playlists.')
 @click.option('--sorting', '--s', default="fav-percentage",
@@ -700,7 +719,7 @@ Cache playlist with specified id (save to csv files on disk).
                    'ref-number', 'ref-percentage',
                    'list-number', 'list-percentage',
                    'track-number',
-                   'points'],
+                   'fav-points', 'ref-points', 'prob-points', 'points'],
                   case_sensitive=False),
               help='Sort resulting list by selected value.')
 @click.option('--reverse-sorting', '-r', is_flag=True,
@@ -709,7 +728,7 @@ Cache playlist with specified id (save to csv files on disk).
               help='Get only playlists whose names matches this regex filter')
 @click.argument('ref-regex')
 def cache_find_best_ref(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
-                        sorting, reverse_sorting, ref_regex):
+                        sorting, reverse_sorting, ref_regex, listened_accuracy, fav_weight, ref_weight, prob_weight):
     """
 Among the cached playlists, find those that contain the most tracks from the reference list.
 As a parameter, pass a regular expression containing the names of playlists from the user library.
@@ -725,7 +744,8 @@ These playlists will be used as a reference list.
         exit()
     infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
                                                                  min_ref_percentage, min_ref_tracks, sorting,
-                                                                 reverse_sorting, filter_names)
+                                                                 reverse_sorting, filter_names, listened_accuracy,
+                                                                 fav_weight, ref_weight, prob_weight)
     print_playlist_infos(infos, limit)
 
 
@@ -738,6 +758,15 @@ These playlists will be used as a reference list.
               help='Skip the playlist if the number reference percentage is less than the given value.')
 @click.option('--min-ref-tracks', '--mrt', type=int, default=1, show_default=True,
               help='Skip the playlist if the number reference tracks is less than the given value.')
+@click.option('--listened-accuracy', '--la', type=int, default=100, show_default=True,
+              help='The number of fav-points will decrease if the number of listened tracks is lower than the specified. '
+                   'Set it to 1000, for example, if you want to increase the fav-points accuracy and have longer playlists in the selection.')
+@click.option('--fav_weight', '--fw', type=float, default=1, show_default=True,
+              help='The weight of fav_points, which affects the final points score.')
+@click.option('--ref_weight', '--rw', type=float, default=1, show_default=True,
+              help='The weight of ref_points, which affects the final points score.')
+@click.option('--prob_weight', '--pw', type=float, default=1, show_default=True,
+              help='The weight of prob_points, which affects the final points score.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of printed playlists.')
 @click.option('--sorting', '--s', default="fav-percentage",
@@ -746,7 +775,7 @@ These playlists will be used as a reference list.
                    'ref-number', 'ref-percentage',
                    'list-number', 'list-percentage',
                    'track-number',
-                   'points'],
+                   'fav-points', 'ref-points', 'prob-points', 'points'],
                   case_sensitive=False),
               help='Sort resulting list by selected value.')
 @click.option('--reverse-sorting', '-r', is_flag=True,
@@ -755,7 +784,8 @@ These playlists will be used as a reference list.
               help='Get only playlists whose names matches this regex filter')
 @click.argument("playlist_ids", nargs=-1)
 def cache_find_best_ref_id(playlist_ids, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
-                           sorting, reverse_sorting, filter_names):
+                           sorting, reverse_sorting, filter_names, listened_accuracy, fav_weight, ref_weight,
+                           prob_weight):
     """
 Among the cached playlists, find those that contain the most tracks from the reference list.
 Provide playlist IDs or  URIs as argument to get playlists from user library.
@@ -763,14 +793,23 @@ These playlists will be used as a reference list.
     """
     lib = col.get_user_library()
     ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    if len(ref_playlist_ids) == 0:
-        click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
-        exit()
     infos, tracks_total, unique_tracks = col.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
                                                                  min_ref_percentage, min_ref_tracks, sorting,
-                                                                 reverse_sorting, filter_names)
+                                                                 reverse_sorting, filter_names, listened_accuracy,
+                                                                 fav_weight, ref_weight, prob_weight)
     print_playlist_infos(infos, limit)
 
+
+@collector.command("playlist-info")
+@click.argument("playlist_ids", nargs=-1)
+def playlist_info(playlist_ids):
+    """
+Provide playlist IDs or  URIs as argument.
+    """
+    lib = col.get_user_library()
+    ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+    infos = col.playlist_info(lib, ref_playlist_ids)
+    print_playlist_infos(infos)
 
 
 @collector.command("cache-stats")
