@@ -33,6 +33,22 @@ cache_dir = os.path.abspath(cache_dir)
 library_cache_dir = os.path.join(current_directory, 'library_cache')
 library_cache_dir = os.path.abspath(library_cache_dir)
 
+if not os.path.isdir(cache_dir):
+    os.makedirs(cache_dir)
+if not os.path.isdir(library_cache_dir):
+    os.makedirs(library_cache_dir)
+
+
+def get_csv_playlist_id_and_name(csvs_file_name):
+    base_name = os.path.basename(csvs_file_name)
+    base_name = os.path.splitext(base_name)[0]
+    if len(base_name) > 21:
+        id = base_name[:22]
+        name = base_name[23:]
+        return id, name
+    else:
+        return None, None
+
 
 def get_cached_playlists_dict(use_library_dir=False):
     read_dir = library_cache_dir if use_library_dir else cache_dir
@@ -43,12 +59,8 @@ def get_cached_playlists_dict(use_library_dir=False):
 
     with click.progressbar(length=len(csvs_in_path), label=f'Collecting cached playlists') as bar:
         for i, file_name in enumerate(csvs_in_path):
-            base_name = os.path.basename(file_name)
-            base_name = os.path.splitext(base_name)[0]
-
-            if len(base_name) > 21:
-                id = base_name[:22]
-                name = base_name[23:]
+            id, name = get_csv_playlist_id_and_name(file_name)
+            if id and name:
                 res[id] = [name, file_name]
             else:
                 click.echo("Invalid cached playlist file name: " + file_name)
@@ -103,78 +115,78 @@ def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False):
     return new_playlists, exist_playlists, cached_playlists
 
 
-# def get_cached_playlists(use_library_dir=False):
-#     read_dir = library_cache_dir if use_library_dir else cache_dir
-#     playlists = []
-#     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
-#     # multi thread
-#     try:
-#         parts = np.array_split(csvs_in_path, THREADS_COUNT)
-#         threads = []
-#         counters = []
-#         results = Queue()
-#
-#         with click.progressbar(length=len(csvs_in_path), label=f'Reading {len(csvs_in_path)} cached playlists') as bar:
-#             # start threads
-#             for i, part in enumerate(parts):
-#                 counter = Value('i', 0)
-#                 counters.append(counter)
-#                 csvs_in_path = list(part)
-#                 thread = Process(target=__read_csvs_thread, args=(csvs_in_path, counter, results))
-#                 threads.append(thread)
-#                 thread.daemon = True  # This thread dies when main thread exits
-#                 thread.start()
-#
-#                 # update bar
-#                 total = sum([x.value for x in counters])
-#                 added = total - bar.pos
-#                 if added > 0:
-#                     bar.update(added)
-#
-#             # waiting for complete
-#             while not bar.finished:
-#                 time.sleep(0.1)
-#                 total = sum([x.value for x in counters])
-#                 added = total - bar.pos
-#                 if added > 0:
-#                     bar.update(added)
-#
-#             # combine results
-#             for i in range(len(parts)):
-#                 res = results.get()
-#                 playlists.extend(res)
-#
-#     except (KeyboardInterrupt, SystemExit):  # aborted by user
-#         click.echo()
-#         click.echo('Aborted.')
-#         sys.exit()
-#     return playlists
+def read_cached_playlists(use_library_dir=False):
+    read_dir = library_cache_dir if use_library_dir else cache_dir
+    playlists = []
+    csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
+    # multi thread
+    try:
+        parts = np.array_split(csvs_in_path, THREADS_COUNT)
+        threads = []
+        counters = []
+        results = Queue()
+
+        with click.progressbar(length=len(csvs_in_path), label=f'Reading {len(csvs_in_path)} cached playlists') as bar:
+            # start threads
+            for i, part in enumerate(parts):
+                counter = Value('i', 0)
+                counters.append(counter)
+                csvs_in_path = list(part)
+                thread = Process(target=__read_csvs_thread, args=(csvs_in_path, counter, results))
+                threads.append(thread)
+                thread.daemon = True  # This thread dies when main thread exits
+                thread.start()
+
+                # update bar
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # waiting for complete
+            while not bar.finished:
+                time.sleep(0.1)
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # combine results
+            for i in range(len(parts)):
+                res = results.get()
+                playlists.extend(res)
+
+    except (KeyboardInterrupt, SystemExit):  # aborted by user
+        click.echo()
+        click.echo('Aborted.')
+        sys.exit()
+    return playlists
 
 
-# def __read_csvs_thread(filenames, counter, result):
-#     res = []
-#
-#     for i, file_name in enumerate(filenames):
-#         base_name = os.path.basename(file_name)
-#         base_name = os.path.splitext(base_name)[0]
-#         playlist_id = str.split(base_name, ' - ')[0]
-#         try:
-#             playlist_name = str.split(base_name, ' - ')[1]
-#         except:
-#             playlist_name = "Unknown"
-#         tags = csv_playlist.read_tags_from_csv_fast(file_name,
-#                                                     ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED', 'SPOTIFY_TRACK_ID'])
-#         pl = {}
-#         pl['id'] = playlist_id
-#         pl['name'] = playlist_name
-#         pl['tracks'] = tags
-#         res.append(pl)
-#
-#         if (i + 1) % 10 == 0:
-#             counter.value += 10
-#         if i + 1 == len(filenames):
-#             counter.value += (i % 10) + 1
-#     result.put(res)
+def __read_csvs_thread(filenames, counter, result):
+    res = []
+
+    for i, file_name in enumerate(filenames):
+        base_name = os.path.basename(file_name)
+        base_name = os.path.splitext(base_name)[0]
+        playlist_id = str.split(base_name, ' - ')[0]
+        try:
+            playlist_name = str.split(base_name, ' - ')[1]
+        except:
+            playlist_name = "Unknown"
+        tags = csv_playlist.read_tags_from_csv_fast(file_name,
+                                                    ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED', 'SPOTIFY_TRACK_ID'])
+        pl = {}
+        pl['id'] = playlist_id
+        pl['name'] = playlist_name
+        pl['tracks'] = tags
+        res.append(pl)
+
+        if (i + 1) % 100 == 0:
+            counter.value += 10
+        if i + 1 == len(filenames):
+            counter.value += (i % 100) + 1
+    result.put(res)
 
 
 def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
@@ -234,10 +246,8 @@ def find_cached_playlists(params: FindBestTracksParams, use_library_dir=False) -
         filterd_csvs = []
         with click.progressbar(length=len(csvs_in_path), label=f'Filtering cached playlists') as bar:
             for i, file_name in enumerate(csvs_in_path):
-                base_name = os.path.basename(file_name)
-                base_name = os.path.splitext(base_name)[0]
-                if len(base_name) > 21:
-                    name = base_name[23:]
+                id, name = get_csv_playlist_id_and_name(file_name)
+                if id and name:
                     if re.search(params.filter_names.upper(), name.upper()):
                         filterd_csvs.append(file_name)
                 else:
@@ -387,8 +397,19 @@ def unsub_playlists_from_cache(group: str):
 
 
 def cache_user_library():
-    return None
+    ids = []
+    all_playlists = spotify_api.get_list_of_playlists()
+    for playlist in all_playlists:
+        ids.append(playlist['id'])
+    cache_by_ids(ids, True, True)
 
 
 def cache_library_delete():
-    return None
+    csvs_in_path = csv_playlist.find_csvs_in_path(library_cache_dir)
+
+    click.confirm(f'Are you sure you want to delete {len(csvs_in_path)} cached user library playlists?', abort=True)
+
+    for file_name in csvs_in_path:
+        os.remove(file_name)
+
+    click.echo(f"{len(csvs_in_path)} playlists removed.")

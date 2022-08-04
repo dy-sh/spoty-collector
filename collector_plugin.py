@@ -453,7 +453,7 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
                 new_tracks = []
                 for m in mirrors:
                     if m.from_cache:
-                        sub_playlist = cache.get_cached_playlists()
+                        sub_playlist = cache.read_cached_playlists()
                     else:
                         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
                         if sub_playlist is not None:
