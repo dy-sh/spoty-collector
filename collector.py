@@ -664,15 +664,17 @@ Find best public playlist by specified search query.
 
 
 @collector.command("cache-by-name")
+@click.option('--overwrite', '-o', is_flag=False,
+              help='Overwrite exist cached playlists.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of processed playlists (max 1000 due to spotify api limit).')
 @click.argument("search_query")
-def cache_by_name(search_query, limit):
+def cache_by_name(search_query, limit, overwrite):
     """
 Find public playlists by specified search query and cache them (save to csv files on disk).
     """
 
-    new, old, all_old = cache.cache_by_name(search_query, limit)
+    new, old, all_old = cache.cache_by_name(search_query, limit, False, overwrite)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
@@ -681,14 +683,16 @@ Find public playlists by specified search query and cache them (save to csv file
 
 
 @collector.command("cache-by-id")
+@click.option('--overwrite', '-o', is_flag=False,
+              help='Overwrite exist cached playlists.')
 @click.argument("playlist_ids", nargs=-1)
-def cache_by_ids(playlist_ids):
+def cache_by_ids(playlist_ids, overwrite):
     """
 Cache playlist with specified id (save to csv files on disk).
     """
 
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new, old, all_old = cache.cache_by_ids(playlist_ids)
+    new, old, all_old = cache.cache_by_ids(playlist_ids, False, overwrite)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
@@ -762,10 +766,11 @@ These playlists will be used as a reference list.
     if len(ref_playlist_ids) == 0:
         click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
         exit()
-    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
-                                                                 min_ref_percentage, min_ref_tracks, sorting,
-                                                                 reverse_sorting, filter_names, listened_accuracy,
-                                                                 fav_weight, ref_weight, prob_weight)
+    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened,
+                                                                   min_listened,
+                                                                   min_ref_percentage, min_ref_tracks, sorting,
+                                                                   reverse_sorting, filter_names, listened_accuracy,
+                                                                   fav_weight, ref_weight, prob_weight)
     print_playlist_infos(infos, limit)
 
     if subscribe_count > 0:
@@ -825,10 +830,11 @@ These playlists will be used as a reference list.
     """
     lib = col.get_user_library()
     ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened, min_listened,
-                                                                 min_ref_percentage, min_ref_tracks, sorting,
-                                                                 reverse_sorting, filter_names, listened_accuracy,
-                                                                 fav_weight, ref_weight, prob_weight)
+    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened,
+                                                                   min_listened,
+                                                                   min_ref_percentage, min_ref_tracks, sorting,
+                                                                   reverse_sorting, filter_names, listened_accuracy,
+                                                                   fav_weight, ref_weight, prob_weight)
     print_playlist_infos(infos, limit)
 
 

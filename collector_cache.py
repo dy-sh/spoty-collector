@@ -30,10 +30,15 @@ THREADS_COUNT = settings.COLLECTOR.THREADS_COUNT
 cache_dir = os.path.join(current_directory, 'cache')
 cache_dir = os.path.abspath(cache_dir)
 
+library_cache_dir = os.path.join(current_directory, 'library_cache')
+library_cache_dir = os.path.abspath(library_cache_dir)
 
-def get_cached_playlists_dict():
+
+def get_cached_playlists_dict(use_library_dir=False):
+    read_dir = library_cache_dir if use_library_dir else cache_dir
+
     click.echo("Reading cache playlists directory")
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
     res = {}
 
     with click.progressbar(length=len(csvs_in_path), label=f'Collecting cached playlists') as bar:
@@ -44,7 +49,7 @@ def get_cached_playlists_dict():
             if len(base_name) > 21:
                 id = base_name[:22]
                 name = base_name[23:]
-                res[id] = name
+                res[id] = [name, file_name]
             else:
                 click.echo("Invalid cached playlist file name: " + file_name)
 
@@ -55,35 +60,30 @@ def get_cached_playlists_dict():
     return res
 
 
-def cache_by_name(search_query, limit):
+def cache_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False):
     playlists = spotify_api.find_playlist_by_query(search_query, limit)
     ids = []
     for playlist in playlists:
         ids.append(playlist['id'])
 
-    new, old, all_old = cache_by_ids(ids)
+    new, old, all_old = cache_by_ids(ids, use_library_dir, overwrite_exist)
     return new, old, all_old
 
 
-def cache_by_ids(playlist_ids):
-    cached_ids = []
-    cached_files = []
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
-    for full_name in csvs_in_path:
-        base_name = os.path.basename(full_name)
-        ext = os.path.splitext(base_name)[1]
-        base_name = os.path.splitext(base_name)[0]
-        dir_name = os.path.dirname(full_name)
-        playlist_id = str.split(base_name, ' - ')[0]
-        cached_ids.append(playlist_id)
-        cached_files.append(full_name)
+def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False):
+    read_dir = library_cache_dir if use_library_dir else cache_dir
+
+    cached_playlists = get_cached_playlists_dict(use_library_dir)
 
     new_playlists = []
     exist_playlists = []
     for playlist_id in playlist_ids:
-        if playlist_id in cached_ids:
-            exist_playlists.append(playlist_id)
-            continue
+        if playlist_id in cached_playlists:
+            if overwrite_exist:
+                os.remove(cached_playlists[playlist_id][1])
+            else:
+                exist_playlists.append(playlist_id)
+                continue
         new_playlists.append(playlist_id)
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
@@ -97,15 +97,16 @@ def cache_by_ids(playlist_ids):
             if len(file_name) > 120:
                 file_name = (file_name[:120] + '..')
             file_name = utils.slugify_file_pah(file_name) + '.csv'
-            cache_file_name = os.path.join(cache_dir, file_name)
+            cache_file_name = os.path.join(read_dir, file_name)
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False)
 
-    return new_playlists, exist_playlists, cached_ids
+    return new_playlists, exist_playlists, cached_playlists
 
 
-def get_cached_playlists():
+def get_cached_playlists(use_library_dir=False):
+    read_dir = library_cache_dir if use_library_dir else cache_dir
     playlists = []
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
     # multi thread
     try:
         parts = np.array_split(csvs_in_path, THREADS_COUNT)
@@ -234,9 +235,10 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
 #     return infos, total_tracks_count, unique_tracks
 
 
-def __find_cached_playlists(params: FindBestTracksParams) -> [List[PlaylistInfo], int, int]:
+def __find_cached_playlists(params: FindBestTracksParams, use_library_dir=False) -> [List[PlaylistInfo], int, int]:
+    read_dir = library_cache_dir if use_library_dir else cache_dir
     click.echo("Reading cache playlists directory")
-    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
 
     if params.filter_names is not None:
         filterd_csvs = []
