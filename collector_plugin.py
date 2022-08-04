@@ -195,9 +195,10 @@ class PlaylistInfo:
 
 
 class Mirror:
+    playlist_id: str
+    from_cache: bool
     group: str
     mirror_name: str
-    playlist_id: str
 
 
 class FindBestTracksParams:
@@ -241,8 +242,9 @@ def read_mirrors(group: str = None) -> List[Mirror]:
 
             m = Mirror()
             m.playlist_id = line.split(',')[0]
-            m.group = line.split(',')[1]
-            m.mirror_name = line.split(',', 2)[2]
+            m.from_cache = line.split(',')[1] == "+"
+            m.group = line.split(',')[2]
+            m.mirror_name = line.split(',', 3)[3]
 
             if group is None or group == m.group:
                 mirrors.append(m)
@@ -266,7 +268,7 @@ def write_mirrors(mirrors: List[Mirror]):
         for m in mirrors:
             m.group = m.group.replace(",", " ")
             m.mirror_name = m.mirror_name.replace(",", " ")
-            file.write(f'{m.playlist_id},{m.group},{m.mirror_name}\n')
+            file.write(f'{m.playlist_id},{"+" if m.from_cache else "-"},{m.group},{m.mirror_name}\n')
 
 
 def get_subscribed_playlist_ids(mirrors: List[Mirror], group: str = None):
@@ -375,38 +377,54 @@ def get_not_listened_tracks(tracks: list, show_progressbar=False, all_listened_t
     return new_tracks, listened_tracks
 
 
-def subscribe(playlist_ids: list, mirror_name=None, group="main"):
+def subscribe(playlist_ids: list, mirror_name=None, group="main", from_cache=False, prevent_dup_mirror_name=False):
     mirrors = read_mirrors()
     all_sub_playlist_ids = []
     all_mirrors_name = []
 
     for playlist_id in playlist_ids:
-        playlist_id = spotify_api.parse_playlist_id(playlist_id)
+        playlist_name = ""
 
-        playlist = spotify_api.get_playlist(playlist_id)
-        if playlist is None:
-            click.echo(f'PLaylist "{playlist_id}" not found.')
-            continue
+        if not from_cache:
+            playlist_id = spotify_api.parse_playlist_id(playlist_id)
+
+            playlist = spotify_api.get_playlist(playlist_id)
+            if playlist is None:
+                click.echo(f'PLaylist "{playlist_id}" not found.')
+                continue
+
+            playlist_name = playlist["name"]
 
         all_subs = get_subscribed_playlist_ids(mirrors)
         if playlist_id in all_subs:
-            click.echo(f'"{playlist["name"]}" ({playlist_id}) playlist skipped. Already subscribed.')
+            click.echo(f'"{playlist_name}" ({playlist_id}) playlist skipped. Already subscribed.')
             continue
 
-        new_mirror_name = mirror_name
-        if new_mirror_name is None:
-            new_mirror_name = playlist['name']
+        new_mirror_name = mirror_name if mirror_name is not None else playlist_name
+
+        if prevent_dup_mirror_name:
+            mirrors_dict = {}
+            for m in mirrors:
+                mirrors_dict[m.mirror_name] = None
+
+            if new_mirror_name in mirrors_dict:
+                for x in range(2, 999999):
+                    n = new_mirror_name + " " + str(x)
+                    if n not in mirrors_dict:
+                        new_mirror_name = n
+                        break
 
         all_sub_playlist_ids.append(playlist_id)
         all_mirrors_name.append(new_mirror_name)
 
         m = Mirror()
         m.mirror_name = new_mirror_name
+        m.from_cache = from_cache
         m.group = group
         m.playlist_id = playlist_id
         mirrors.append(m)
 
-        click.echo(f'Subscribed to playlist "{playlist["name"]}".')
+        click.echo(f'Subscribed to playlist "{new_mirror_name}" ({playlist_id}).')
 
     write_mirrors(mirrors)
 
@@ -1620,3 +1638,30 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     info.ref_points = round(info.ref_points, 2)
 
     return info
+
+
+def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: str):
+    infos.reverse()
+    added_playlists = 0
+    small_tracks = 0
+    small_added = False
+    for info in infos:
+        if added_playlists >= count:
+            break
+        not_listened_count = info.tracks_count - info.listened_tracks_count
+        if not_listened_count < 20:
+            if small_tracks < 1000:
+                mirror_name = "++ " + group
+                subscribe([info.playlist_id], mirror_name, group, True, False)
+                small_tracks += not_listened_count
+                if not small_added:
+                    added_playlists += 1
+                    small_added = True
+        else:
+            mirror_name = "++ " + group + " - " + info.playlist_name
+            subscribe([info.playlist_id], mirror_name, group, True, True)
+            added_playlists += 1
+
+
+def unsub_playlists_from_cache(group: str):
+    pass
