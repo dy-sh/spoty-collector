@@ -259,7 +259,7 @@ def get_mirrors_dict(mirrors: List[Mirror]):
             res[m.group] = {}
         if m.mirror_name not in res[m.group]:
             res[m.group][m.mirror_name] = []
-        res[m.group][m.mirror_name].append(m.playlist_id)
+        res[m.group][m.mirror_name].append(m)
     return res
 
 
@@ -559,20 +559,44 @@ def list_playlists(fast=True, group: str = None):
 
     for group, mirrors_in_grp in mirrors_dict.items():
         click.echo(f'\n============================= Group "{group}" =================================')
-        for mirror_name, sub_ids in mirrors_in_grp.items():
+        for mirror_name, mirrors in mirrors_in_grp.items():
             mirrors_count += 1
             click.echo(f'\n"{mirror_name}":')
-            for playlist_id in sub_ids:
+            for m in mirrors:
                 if fast:
-                    click.echo(f'  {playlist_id}')
+                    click.echo(f'  {m.playlist_id}')
                 else:
-                    playlist = spotify_api.get_playlist(playlist_id)
+                    playlist = spotify_api.get_playlist(m.playlist_id)
                     if playlist is None:
-                        click.echo(f'  Playlist "{playlist_id}" not found.')
+                        click.echo(f'  Playlist "{m.playlist_id}" not found.')
                         continue
-                    click.echo(f'  {playlist_id} "{playlist["name"]}"')
+                    click.echo(f'  {m.playlist_id} "{playlist["name"]}"')
     click.echo(f'----------------------------------------------------------------------------')
     click.echo(f'Total {len(all_playlists)} subscribed playlists in {mirrors_count} mirrors.')
+
+
+def get_cached_playlists_dict():
+    click.echo("Reading cache playlists directory")
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    res = {}
+
+    with click.progressbar(length=len(csvs_in_path), label=f'Collecting cached playlists') as bar:
+        for i, file_name in enumerate(csvs_in_path):
+            base_name = os.path.basename(file_name)
+            base_name = os.path.splitext(base_name)[0]
+
+            if len(base_name) > 21:
+                id = base_name[:22]
+                name = base_name[23:]
+                res[id] = name
+            else:
+                click.echo("Invalid cached playlist file name: " + file_name)
+
+            if i % 1000 == 0:
+                bar.update(1000)
+        bar.finish()
+
+    return res
 
 
 def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=None):
@@ -589,8 +613,6 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
 
     user_playlists = spotify_api.get_list_of_playlists()
 
-    # with click.progressbar(mirrors.items(), label='Updating mirrors') as bar:
-
     all_listened = []
     all_duplicates = []
     all_liked = []
@@ -602,10 +624,13 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
 
     mirrors_dict = get_mirrors_dict(mirrors)
 
+    cached_playlists = get_cached_playlists_dict()
+    exit()
+
     with click.progressbar(length=len(subs) + 1,
                            label=f'Updating {len(subs)} subscribed playlists') as bar:
         for group, mirrors_in_grp in mirrors_dict.items():
-            for mirror_name, sub_playlists_ids in mirrors_in_grp.items():
+            for mirror_name, mirrors in mirrors_in_grp.items():
                 # get mirror playlist
                 mirror_playlist_id = None
                 for playlist in user_playlists:
@@ -618,13 +643,16 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
 
                 # get all tracks from subscribed playlists
                 new_tracks = []
-                for sub_id in sub_playlists_ids:
-                    sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_id)
-                    if sub_playlist is not None:
-                        sub_tracks = sub_playlist["tracks"]["items"]
-                        sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
-                        new_tracks.extend(sub_tags_list)
-                        all_sub_tracks.extend(sub_tags_list)
+                for m in mirrors:
+                    if m.from_cache:
+                        sub_playlist = get_cached_playlists()
+                    else:
+                        sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
+                        if sub_playlist is not None:
+                            sub_tracks = sub_playlist["tracks"]["items"]
+                            sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
+                            new_tracks.extend(sub_tags_list)
+                            all_sub_tracks.extend(sub_tags_list)
                     bar.update(1)
 
                 # remove duplicates
@@ -932,7 +960,8 @@ def get_all_subscriptions_info(mirror_group: str = None) -> List[SubscriptionInf
                            label=f'Collecting info for {len(lib.mirrors)} playlists') as bar:
         for sub_playlist_id in bar:
             info = __get_subscription_info(sub_playlist_id, lib)
-            infos.append(info)
+            if info is not None:
+                infos.append(info)
 
     return infos
 
@@ -1034,13 +1063,11 @@ def __get_subscription_info(sub_playlist_id: str, lib: UserLibrary, playlist=Non
 
     tracks_exist_in_fav = []
     for track in listened_or_liked:
-        if track['ISRC'] in lib.fav_tracks:
-            for length in lib.fav_tracks[track['ISRC']]:
-                if length == track['SPOTY_LENGTH']:
-                    tracks_exist_in_fav.append(track)
+        if track['ISRC'] in lib.fav_tracks.track_isrcs:
+            tracks_exist_in_fav.append(track)
 
     tracks_exist_in_fav_playlists = {}
-    for playlist_name, fav_tracks in lib.fav_playlist_ids.items():
+    for track_id, playlists in lib.fav_tracks.track_ids.items():
         for track in listened_or_liked:
             if track['ISRC'] in fav_tracks:
                 for length in fav_tracks[track['ISRC']]:
@@ -1312,20 +1339,23 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
 
 
 def __find_cached_playlists(params: FindBestTracksParams) -> [List[PlaylistInfo], int, int]:
+    click.echo("Reading cache playlists directory")
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
 
     if params.filter_names is not None:
         filterd_csvs = []
-        with click.progressbar(csvs_in_path, label=f'Filtering cached playlists') as bar:
-            for file_name in bar:
+        with click.progressbar(length=len(csvs_in_path), label=f'Filtering cached playlists') as bar:
+            for i, file_name in enumerate(csvs_in_path):
                 base_name = os.path.basename(file_name)
                 base_name = os.path.splitext(base_name)[0]
-                try:
-                    base_name = str.split(base_name, ' - ')[1]
-                except:
-                    base_name = str.split(base_name, ' -')[1]
-                if re.search(params.filter_names.upper(), base_name.upper()):
-                    filterd_csvs.append(file_name)
+                if len(base_name) > 21:
+                    name = base_name[23:]
+                    if re.search(params.filter_names.upper(), name.upper()):
+                        filterd_csvs.append(file_name)
+                else:
+                    click.echo("Invalid cached playlist file name: " + file_name)
+                if i % 1000 == 0:
+                    bar.update(1000)
         click.echo(f'{len(filterd_csvs)}/{len(csvs_in_path)} playlists matches the regex filter')
         csvs_in_path = filterd_csvs
         if len(csvs_in_path) == 0:

@@ -558,15 +558,17 @@ def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = No
     else:
         click.echo("\n======================================================================\n")
 
-    days = (datetime.today() - info.last_update).days
-
     if info.mirror_name is not None:
         click.echo(f'Mirror          : "{info.mirror_name}"')
     click.echo(f'Playlist        : "{info.playlist["name"]}" ({info.playlist["id"]})')
-    if days < 10000:
-        click.echo(f'Last update     : {info.last_update} ({days} days)')
-    else:
-        click.echo(f'Last update     : Unknown')
+
+    if info.last_update is not None:
+        days = (datetime.today() - info.last_update).days
+        if days < 10000:
+            click.echo(f'Last update     : {info.last_update} ({days} days)')
+        else:
+            click.echo(f'Last update     : Unknown')
+
     click.echo(f'Tracks total    : {len(info.tracks)}')
     click.echo(f'Tracks listened : {len(info.listened_tracks)}')
     click.echo(f'Favorite tracks : {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
