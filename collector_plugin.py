@@ -834,7 +834,7 @@ def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_lis
             fav_playlist_ids.append(playlist['id'])
 
     # read fav playlists from spotify
-    fav_tracks, fav_tags, lib.fav_playlist_ids = spotify_api.get_tracks_from_playlists(fav_playlist_ids)
+    fav_tags, lib.fav_playlist_ids = cache.get_tracks_from_playlists(fav_playlist_ids)
     lib.fav_tracks.add_tracks(fav_tags)
 
     if add_fav_to_listened:
@@ -1018,10 +1018,6 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
             info.prob_good_tracks_percentage += __get_prob_good_track_percentage(params, artists)
             pass
 
-        # calculate points
-        # info.points += __calculate_track_points(is_listened, is_fav, prob_good_or_bad)
-        # info.points += __calculate_track_points(params, artists, is_listened, is_fav, is_ref, prob_good_or_bad)
-
     not_listened_count = info.tracks_count - info.listened_tracks_count
     if not_listened_count > 0:
         info.prob_good_tracks_percentage /= not_listened_count
@@ -1041,13 +1037,6 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     return info
 
 
-
-def __calculate_track_points(is_listened, is_fav, prob_good_or_bad):
-    if is_fav:
-        return 1
-    if is_listened and not is_fav:
-        return -1
-    return prob_good_or_bad
 
 
 def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):

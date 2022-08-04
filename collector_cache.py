@@ -167,12 +167,8 @@ def __read_csvs_thread(filenames, counter, result):
     res = []
 
     for i, file_name in enumerate(filenames):
-        base_name = os.path.basename(file_name)
-        base_name = os.path.splitext(base_name)[0]
-        playlist_id = str.split(base_name, ' - ')[0]
-        try:
-            playlist_name = str.split(base_name, ' - ')[1]
-        except:
+        playlist_id, playlist_name = get_csv_playlist_id_and_name(file_name)
+        if playlist_name == "":
             playlist_name = "Unknown"
         tags = csv_playlist.read_tags_from_csv_fast(file_name,
                                                     ['ISRC', 'SPOTY_LENGTH', 'SPOTY_TRACK_ADDED', 'SPOTIFY_TRACK_ID'])
@@ -199,7 +195,7 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     ref_playlist_ids = playlist_ids
 
     params = FindBestTracksParams(lib)
-    ref_tracks_ids, ref_tags, ref_playlist_ids = spotify_api.get_tracks_from_playlists(ref_playlist_ids)
+    ref_tags, ref_playlist_ids = get_tracks_from_playlists(ref_playlist_ids)
     params.ref_tracks.add_tracks(ref_tags)
     params.min_not_listened = min_not_listened
     params.min_listened = min_listened
@@ -211,7 +207,7 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     params.fav_weight = fav_weight
     params.ref_weight = ref_weight
     params.prob_weight = prob_weight
-    infos, total_tracks_count, unique_tracks = find_cached_playlists(params)
+    infos, total_tracks_count, unique_tracks = get_cached_playlists_info(params)
     if sorting == "fav-number":
         infos = sorted(infos, reverse=reverse_sorting, key=lambda x: x.fav_tracks_count)
     elif sorting == "fav-percentage":
@@ -237,7 +233,7 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     return infos, total_tracks_count, unique_tracks
 
 
-def find_cached_playlists(params: FindBestTracksParams, use_library_dir=False) -> [List[PlaylistInfo], int, int]:
+def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=False) -> [List[PlaylistInfo], int, int]:
     read_dir = library_cache_dir if use_library_dir else cache_dir
     click.echo("Reading cache playlists directory")
     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
@@ -325,12 +321,8 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
     total_tracks_count = 0
 
     for i, file_name in enumerate(csv_filenames):
-        base_name = os.path.basename(file_name)
-        base_name = os.path.splitext(base_name)[0]
-        playlist_id = str.split(base_name, ' - ')[0]
-        try:
-            playlist_name = str.split(base_name, ' - ')[1]
-        except:
+        playlist_id, playlist_name = get_csv_playlist_id_and_name(file_name)
+        if playlist_name == "":
             playlist_name = "Unknown"
         tags = csv_playlist.read_tags_from_csv_fast(file_name, ['ISRC', 'ARTIST', 'TITLE'])
         playlist = {}
@@ -408,7 +400,7 @@ def cache_user_library(only_new=False):
 def cache_library_delete():
     csvs_in_path = csv_playlist.find_csvs_in_path(library_cache_dir)
 
-    if len(csvs_in_path)==0:
+    if len(csvs_in_path) == 0:
         click.echo(f"No cached playlists found.")
         exit()
 
@@ -418,3 +410,44 @@ def cache_library_delete():
         os.remove(file_name)
 
     click.echo(f"{len(csvs_in_path)} playlists removed.")
+
+
+def is_playlist_cached(id: str, use_library_dir: bool):
+    playlists = get_cached_playlists_dict(use_library_dir)
+    return id in playlists
+
+
+def get_tracks_from_playlists(playlist_ids: List[str]):
+    cached_playlists = get_cached_playlists_dict(True)
+    found_ids = []
+    not_found_ids = []
+
+    playlists = []
+
+    for id in playlist_ids:
+        if id in cached_playlists:
+            found_ids.append(id)
+        else:
+            not_found_ids.append(id)
+
+    with click.progressbar(length=len(found_ids), label=f'Reading {len(found_ids)} cached playlists') as bar:
+        for id in found_ids:
+            file_name = cached_playlists[id][1]
+            playlist_id, playlist_name = get_csv_playlist_id_and_name(file_name)
+            if playlist_name == "":
+                playlist_name = "Unknown"
+            tags = csv_playlist.read_tags_from_csv(file_name, False, False, True)
+            pl = {}
+            pl['id'] = playlist_id
+            pl['name'] = playlist_name
+            pl['tracks'] = tags
+            playlists.append(pl)
+            bar.update(1)
+
+    tracks, tags, playlist_ids = spotify_api.get_tracks_from_playlists(not_found_ids)
+
+    for pl in playlists:
+        tags.extend(pl['tracks'])
+        playlist_ids.append(pl['id'])
+
+    return tags, playlist_ids

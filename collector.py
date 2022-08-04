@@ -884,3 +884,5 @@ Use --cache-library to cache playlists.
     """
     cache.cache_library_delete()
     click.echo(f'Cached library deleted')
+
+
