@@ -33,6 +33,8 @@ cache_dir = os.path.abspath(cache_dir)
 library_cache_dir = os.path.join(current_directory, 'library_cache')
 library_cache_dir = os.path.abspath(library_cache_dir)
 
+mirror_playlist_prefix = settings.COLLECTOR.MIRROR_PLAYLISTS_PREFIX
+
 if not os.path.isdir(cache_dir):
     os.makedirs(cache_dir)
 if not os.path.isdir(library_cache_dir):
@@ -376,14 +378,14 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
         not_listened_count = info.tracks_count - info.listened_tracks_count
         if not_listened_count < 20:
             if small_tracks < 1000:
-                mirror_name = "++ " + group
+                mirror_name = mirror_playlist_prefix + group
                 col.subscribe([info.playlist_id], mirror_name, group, True, False)
                 small_tracks += not_listened_count
                 if not small_added:
                     added_playlists += 1
                     small_added = True
         else:
-            mirror_name = "++ " + group + " - " + info.playlist_name
+            mirror_name = mirror_playlist_prefix + group + " - " + info.playlist_name
             col.subscribe([info.playlist_id], mirror_name, group, True, True)
             added_playlists += 1
 

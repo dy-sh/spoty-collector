@@ -40,6 +40,8 @@ mirrors_file_name = os.path.abspath(mirrors_file_name)
 
 THREADS_COUNT = settings.COLLECTOR.THREADS_COUNT
 
+mirror_playlist_prefix = settings.COLLECTOR.MIRROR_PLAYLISTS_PREFIX
+
 LISTENED_LIST_TAGS = [
     'SPOTY_LENGTH',
     'SPOTIFY_TRACK_ID',
@@ -454,7 +456,8 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
                             new_tracks.extend(sub_playlist['tracks'])
                             all_sub_tracks.extend(sub_playlist['tracks'])
                         else:
-                            click.echo(f"\nCant update mirror playlist {m.playlist_id}. CSV file not found in cache directory.")
+                            click.echo(
+                                f"\nCant update mirror playlist {m.playlist_id}. CSV file not found in cache directory.")
                     else:
                         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
                         if sub_playlist is not None:
