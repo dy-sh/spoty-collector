@@ -320,7 +320,7 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
         playlist_id, playlist_name = csv_playlist.get_csv_playlist_id_and_name(file_name)
         if playlist_name == "":
             playlist_name = "Unknown"
-        tags = csv_playlist.read_tags_from_csv_fast(file_name, ['ISRC', 'ARTIST', 'TITLE'])
+        tags = csv_playlist.read_tags_from_csv_fast(file_name, ['ISRC', 'ARTIST', 'TITLE'], True)
         playlist = {}
         playlist['id'] = playlist_id
         playlist['name'] = playlist_name

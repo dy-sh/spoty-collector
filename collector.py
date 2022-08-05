@@ -193,63 +193,54 @@ When executed, the following will happen:
     col.update(not do_not_remove, confirm, mirror_ids, mirror_group)
 
 
-@collector.command("listened-count")
-def listened_count():
-    """
-Print the number of tracks listened to.
-    """
-    tags_list = col.read_listened_tracks()
-    click.echo(f'{len(tags_list)} tracks listened.')
+# @collector.command("listened")
+# @click.argument("playlist_ids", nargs=-1)
+# @click.option('--like', '-s', is_flag=True,
+#               help='Like all tracks in playlist.')
+# @click.option('--do-not-remove', '-R', is_flag=True,
+#               help='Do not remove listened playlists.')
+# # @click.option('--find-copies', '-c', is_flag=True,
+# #               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
+# @click.option('--confirm', '-y', is_flag=True,
+#               help='Do not ask for delete playlist confirmation.')
+# def listened(playlist_ids, like, do_not_remove, confirm):
+#     """
+# Mark playlist as listened to (by playlist ID or URI).
+# It can be a mirror playlist or a regular playlist from your library or another user's playlist.
+# When you run this command, the following will happen:
+# - All tracks will be added to the list, which containing all the tracks you've listened to. This list is stored in a file (execute "config" command to find it).
+# - If you added a --like flag, all tracks will be liked. Thus, when you see a like in any Spotify playlist, you will know that you have already heard this track.
+# - If playlist exist in your library, it will be removed. You can cancel this step with a --do-not-remove flag.
+#     """
+#     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+#     tags_list, liked_tracks, deleted_playlists, added_tracks, already_listened_tags \
+#         = col.listened(playlist_ids, like, do_not_remove, confirm)
+#     click.echo(f'{len(tags_list)} tracks total in specified playlists.')
+#     if len(liked_tracks) > 0:
+#         click.echo(f'{len(liked_tracks)} tracks liked.')
+#     if len(deleted_playlists) > 0:
+#         click.echo(f'{len(deleted_playlists)} playlists deleted from library.')
+#     if len(already_listened_tags) > 0:
+#         click.echo(f'{len(already_listened_tags)} tracks already in listened list.')
+#     click.echo(f'{len(added_tracks)} tracks added to listened list.')
 
 
-@collector.command("listened")
-@click.argument("playlist_ids", nargs=-1)
-@click.option('--like', '-s', is_flag=True,
-              help='Like all tracks in playlist.')
-@click.option('--do-not-remove', '-R', is_flag=True,
-              help='Do not remove listened playlists.')
-# @click.option('--find-copies', '-c', is_flag=True,
-#               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
-@click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete playlist confirmation.')
-def listened(playlist_ids, like, do_not_remove, confirm):
-    """
-Mark playlist as listened to (by playlist ID or URI).
-It can be a mirror playlist or a regular playlist from your library or another user's playlist.
-When you run this command, the following will happen:
-- All tracks will be added to the list, which containing all the tracks you've listened to. This list is stored in a file (execute "config" command to find it).
-- If you added a --like flag, all tracks will be liked. Thus, when you see a like in any Spotify playlist, you will know that you have already heard this track.
-- If playlist exist in your library, it will be removed. You can cancel this step with a --do-not-remove flag.
-    """
-    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    tags_list, liked_tracks, deleted_playlists, added_tracks, already_listened_tags \
-        = col.listened(playlist_ids, like, do_not_remove, confirm)
-    click.echo(f'{len(tags_list)} tracks total in specified playlists.')
-    if len(liked_tracks) > 0:
-        click.echo(f'{len(liked_tracks)} tracks liked.')
-    if len(deleted_playlists) > 0:
-        click.echo(f'{len(deleted_playlists)} playlists deleted from library.')
-    if len(already_listened_tags) > 0:
-        click.echo(f'{len(already_listened_tags)} tracks already in listened list.')
-    click.echo(f'{len(added_tracks)} tracks added to listened list.')
-
-
-@collector.command("ok")
-@click.argument("playlist_ids", nargs=-1)
-@click.option('--like', '-s', is_flag=True,
-              help='Like all tracks in playlist.')
-# @click.option('--find-copies', '-c', is_flag=True,
-#               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
-@click.option('--do-not-remove', '-R', is_flag=True,
-              help='Do not remove listened playlists.')
-@click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for delete playlist confirmation.')
-@click.pass_context
-def ok(ctx, playlist_ids, like, do_not_remove, confirm):
-    """
-Alias for "listened" command (to type shorter)
-    """
-    ctx.invoke(listened, playlist_ids=playlist_ids, like=like, do_not_remove=do_not_remove, confirm=confirm)
+# @collector.command("ok")
+# @click.argument("playlist_ids", nargs=-1)
+# @click.option('--like', '-s', is_flag=True,
+#               help='Like all tracks in playlist.')
+# # @click.option('--find-copies', '-c', is_flag=True,
+# #               help='For each track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
+# @click.option('--do-not-remove', '-R', is_flag=True,
+#               help='Do not remove listened playlists.')
+# @click.option('--confirm', '-y', is_flag=True,
+#               help='Do not ask for delete playlist confirmation.')
+# @click.pass_context
+# def ok(ctx, playlist_ids, like, do_not_remove, confirm):
+#     """
+# Alias for "listened" command (to type shorter)
+#     """
+#     ctx.invoke(listened, playlist_ids=playlist_ids, like=like, do_not_remove=do_not_remove, confirm=confirm)
 
 
 @collector.command("del")
@@ -851,18 +842,35 @@ These playlists will be used as a reference list.
     print_playlist_infos(infos, limit)
 
 
-@collector.command("cache-stats")
-def cache_stats():
+@collector.command("stats")
+@click.option('--no-cache', '-c', is_flag=True,
+              help='Do not read cache (it might be long).')
+def stats(no_cache):
     """
 Cached playlists statistics
     """
-    lib = col.get_user_library()
+    lib = col.get_user_library(None, None, False)
     params = FindBestTracksParams(lib)
-    infos, total_tracks_count, unique_tracks = cache.get_cached_playlists_info(params, False, True)
+    if not no_cache:
+        cached_playlists, cached_tracks, unique_cached_tracks = cache.get_cached_playlists_info(params, False, True)
+        lib_cached_playlists, lib_cached_tracks, lib_unique_cached_tracks = cache.get_cached_playlists_info(params,
+                                                                                                            True, True)
     click.echo("\n======================================================================\n")
-    click.echo(f'Cached playlists: {len(infos)}')
-    click.echo(f'Tracks total in playlists: {total_tracks_count}')
-    click.echo(f'Total unique tracks: {len(unique_tracks)}')
+    click.echo("--------------- SPOTIFY LIBRARY -----------------")
+    click.echo(f'Playlists in library                     : {len(lib.all_playlists)}')
+    click.echo(f'Fav playlists                            : {len(lib.fav_tracks.playlists_by_ids)}')
+    click.echo(f'Fav tracks                               : {len(lib.fav_tracks.track_ids)}')
+    click.echo("--------------- OFFLINE LIBRARY -----------------")
+    click.echo(f'Tracks listened                          : {len(lib.listened_tracks.track_ids)}')
+    click.echo(f'Mirrors                                  : {len(lib.mirrors)}')
+    if not no_cache:
+        click.echo("-------------------- CACHE ----------------------")
+        click.echo(f'Cached playlists                         : {len(cached_playlists)}')
+        click.echo(f'Tracks in cached playlists               : {cached_tracks}')
+        click.echo(f'Unique tracks in cached playlists        : {len(unique_cached_tracks)}')
+        click.echo(f'Cached library playlists                 : {len(lib_cached_playlists)}')
+        click.echo(f'Tracks in cached library playlists       : {lib_cached_tracks}')
+        click.echo(f'Unique tracks in cached library playlists: {len(lib_unique_cached_tracks)}')
 
 
 @collector.command("cache-library")
