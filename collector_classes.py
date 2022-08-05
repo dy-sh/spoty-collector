@@ -1,5 +1,4 @@
 from typing import List
-from datetime import datetime, timedelta
 
 
 class TracksCollection:
@@ -88,17 +87,6 @@ class UserLibrary:
 class FavPlaylistInfo:
     playlist_name: str
     tracks_count: int
-
-
-class SubscriptionInfo:
-    mirror_name: str = None
-    playlist: dict
-    tracks: List
-    listened_tracks: List
-    fav_tracks: List
-    fav_tracks_by_playlists: List[FavPlaylistInfo]
-    fav_percentage: float
-    last_update: datetime
 
 
 class PlaylistInfo:

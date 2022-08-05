@@ -689,34 +689,6 @@ def sort_mirrors():
 
 
 
-def get_all_subscriptions_info(group_name: str = None) -> List[SubscriptionInfo]:
-    if group_name is not None:
-        group_name = group_name.upper()
-
-    lib = get_user_library(group_name)
-    infos = []
-
-    with click.progressbar(lib.subscribed_playlist_ids,
-                           label=f'Collecting info for {len(lib.mirrors)} playlists') as bar:
-        for sub_playlist_id in bar:
-            info = __get_subscription_info(sub_playlist_id, lib)
-            if info is not None:
-                infos.append(info)
-
-    return infos
-
-
-def get_subscriptions_info(sub_playlist_ids: List[str]) -> List[SubscriptionInfo]:
-    lib = get_user_library()
-    infos = []
-
-    for id in sub_playlist_ids:
-        info = __get_subscription_info(id, lib)
-        if info is not None:
-            infos.append(info)
-
-    return infos
-
 
 def __calculate_artists_rating(lib: UserLibrary):
     for artist in lib.listened_tracks.track_artists:
@@ -780,93 +752,6 @@ def get_user_library(group_name: str = None, filter_names=None, add_fav_to_liste
     return lib
 
 
-def __get_subscription_info(sub_playlist_id: str, lib: UserLibrary, playlist=None,
-                            check_likes=False, all_listened_tracks_dict=None) -> SubscriptionInfo:
-    # get all tracks from subscribed playlists
-    if playlist is None:
-        sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(sub_playlist_id)
-        if sub_playlist is None:
-            return None
-
-        sub_tracks = sub_playlist["tracks"]["items"]
-        sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
-    else:
-        sub_playlist = playlist
-        sub_tags_list = playlist['tracks']
-
-    # get listened tracks
-    not_listened_tracks, listened_tracks = get_not_listened_tracks(sub_tags_list, False, all_listened_tracks_dict)
-
-    # get liked tracks
-    listened_or_liked = listened_tracks.copy()
-
-    if check_likes:
-        liked, not_liked = spotify_api.get_liked_tags_list(not_listened_tracks)
-        listened_or_liked.extend(liked)
-
-    tracks_exist_in_fav = []
-    for track in listened_or_liked:
-        if track['ISRC'] in lib.fav_tracks.track_isrcs:
-            tracks_exist_in_fav.append(track)
-
-    tracks_exist_in_fav_playlists = {}
-    for track_id, playlists in lib.fav_tracks.track_ids.items():
-        for track in listened_or_liked:
-            if track['ISRC'] in fav_tracks:
-                for length in fav_tracks[track['ISRC']]:
-                    if length == track['SPOTY_LENGTH']:
-                        if playlist_name not in tracks_exist_in_fav_playlists:
-                            tracks_exist_in_fav_playlists[playlist_name] = []
-                        tracks_exist_in_fav_playlists[playlist_name].append(track)
-
-    fav_tracks_by_playlists = []
-    for playlist_name, tracks in tracks_exist_in_fav_playlists.items():
-        i = FavPlaylistInfo()
-        i.playlist_name = playlist_name
-        i.tracks_count = len(tracks)
-        fav_tracks_by_playlists.append(i)
-    fav_tracks_by_playlists = sorted(fav_tracks_by_playlists, key=lambda x: x.tracks_count, reverse=True)
-
-    fav_percentage = 0
-    if len(listened_or_liked) != 0:
-        fav_percentage = len(tracks_exist_in_fav) / len(listened_or_liked) * 100
-
-    last_update = None
-    for tags in sub_tags_list:
-        if 'SPOTY_TRACK_ADDED' in tags:
-            track_added = datetime.strptime(tags['SPOTY_TRACK_ADDED'], "%Y-%m-%d %H:%M:%S")
-            if last_update is None or last_update < track_added:
-                last_update = track_added
-
-    info = SubscriptionInfo()
-    info.fav_percentage = fav_percentage
-    info.last_update = last_update
-    info.playlist = sub_playlist
-    info.listened_tracks = listened_or_liked
-    info.fav_tracks = tracks_exist_in_fav
-    info.fav_tracks_by_playlists = fav_tracks_by_playlists
-    info.tracks = sub_tags_list
-
-    for m in lib.mirrors:
-        if sub_playlist_id == m.playlist_id:
-            info.mirror_name = m.mirror_name
-
-    return info
-
-
-def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tracks_dict, counter, result):
-    res = []
-
-    for i, playlist in enumerate(playlists):
-        info = __get_subscription_info(playlist['id'], lib, playlist, check_likes, all_listened_tracks_dict)
-        if info is not None:
-            res.append(info)
-
-        if (i + 1) % 100 == 0:
-            counter.value += 100
-        if i + 1 == len(playlists):
-            counter.value += (i % 100) + 1
-    result.put(res)
 
 
 def playlist_info(lib, playlist_ids):

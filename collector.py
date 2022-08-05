@@ -366,115 +366,6 @@ Sort mirrors in the mirrors file and check for subscribed playlist id duplicates
     col.sort_mirrors()
 
 
-@collector.command("info-sub")
-@click.argument("playlist_id")
-def info_sub(playlist_id):
-    """
-Print collected info about subscription (or any other) playlists.
-
-PLAYLIST_ID - ID or URI of playlist.
-    """
-    playlist_id = spotify_api.parse_playlist_id(playlist_id)
-
-    infos = col.get_subscriptions_info([playlist_id])
-    print_mirror_infos(infos)
-
-
-@collector.command("info-mirror")
-@click.argument("mirror_playlist_id")
-def info_mirror(mirror_playlist_id):
-    """
-Print info about specified mirror.
-
-PLAYLIST_ID - mirror playlist ID or URI.
-    """
-    subs = col.get_subs_by_mirror_playlist_id(mirror_playlist_id)
-
-    if subs is None:
-        exit()
-
-    lib = col.get_user_library()
-    infos = []
-
-    with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
-        for id in bar:
-            info = col.__get_subscription_info(id, lib)
-            if info is not None:
-                infos.append(info)
-
-    print_mirror_infos(infos)
-
-
-@collector.command("info-mirror-name")
-@click.argument("mirror_name")
-def info_mirror_name(mirror_name):
-    """
-Print info about specified mirror.
-
-MIRROR_NAME - mirror name.
-    """
-    subs = col.get_subs_by_mirror_name(mirror_name)
-
-    if subs is None:
-        exit()
-
-    lib = col.get_user_library()
-    infos = []
-
-    with click.progressbar(subs, label=f'Collecting info for {len(subs)} playlists') as bar:
-        for id in bar:
-            info = col.__get_subscription_info(id, lib)
-            if info is not None:
-                infos.append(info)
-
-    print_mirror_infos(infos)
-
-
-@collector.command("info-all")
-@click.option('--mirror-group', '--g',
-              help='Mirror group name (all if not specified).')
-def info_all_mirrors(mirror_group):
-    """
-Print info all mirrors.
-    """
-    infos = col.get_all_subscriptions_info(mirror_group)
-
-    print_mirror_infos(infos)
-
-
-def print_mirror_infos(infos: List[SubscriptionInfo], limit: int = None):
-    if limit is None:
-        limit = len(infos)
-    for i, info in enumerate(infos):
-        if len(infos) - i - 1 < limit:
-            print_mirror_info(info, i, len(infos))
-
-
-def print_mirror_info(info: SubscriptionInfo, index: int = None, count: int = None):
-    if index is not None and count is not None:
-        click.echo(f"\n============================== {index + 1} / {count} ==============================\n")
-    else:
-        click.echo("\n======================================================================\n")
-
-    if info.mirror_name is not None:
-        click.echo(f'Mirror          : "{info.mirror_name}"')
-    click.echo(f'Playlist        : "{info.playlist["name"]}" ({info.playlist["id"]})')
-
-    if info.last_update is not None:
-        days = (datetime.today() - info.last_update).days
-        if days < 10000:
-            click.echo(f'Last update     : {info.last_update} ({days} days)')
-        else:
-            click.echo(f'Last update     : Unknown')
-
-    click.echo(f'Tracks total    : {len(info.tracks)}')
-    click.echo(f'Tracks listened : {len(info.listened_tracks)}')
-    click.echo(f'Favorite tracks : {len(info.fav_tracks)} ({info.fav_percentage:.1f}%)')
-    click.echo(f'---------- (fav.tracks count : fav.playlist name) ----------')
-    for i, pl_info in enumerate(info.fav_tracks_by_playlists):
-        click.echo(f'{pl_info.tracks_count} : "{pl_info.playlist_name}"')
-
-
 def print_playlist_infos(infos: List[PlaylistInfo], limit: int = None):
     if len(infos) == 0:
         click.echo(f'No playlists found matching the query.')
@@ -564,7 +455,7 @@ Provide playlist IDs or  URIs as argument.
     print_playlist_infos(infos)
 
 
-@collector.command("cache-find-best-ref")
+@collector.command("cache-find-best")
 @click.option('--min-listened', '--ml', type=int, default=0, show_default=True,
               help='Skip the playlist if the number of listened tracks is less than the given value.')
 @click.option('--min-not-listened', '--mnl', type=int, default=1, show_default=True,
@@ -602,23 +493,39 @@ Provide playlist IDs or  URIs as argument.
 @click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP,
               show_default=True,
               help='Group playlists under a given name for convenience. Used in conjunction with --subscribe-count.')
-@click.argument('ref-regex')
-def cache_find_best_ref(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
-                        sorting, reverse_sorting, ref_regex, listened_accuracy, fav_weight, ref_weight, prob_weight,
-                        subscribe_count, subscribe_group):
+@click.option('--ref', '--r', type=str,
+              help='Regular expression to take reference playlists from the library.')
+@click.option('--ref-id', '--rid', type=str, multiple=True,
+              help='IDs or URIs to take reference playlists from the library.')
+def cache_find_best(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
+                        sorting, reverse_sorting, listened_accuracy, fav_weight, ref_weight, prob_weight,
+                        subscribe_count, subscribe_group,ref,ref_id):
     """
-Among the cached playlists, find those that contain the most tracks from the reference list.
-As a parameter, pass a regular expression containing the names of playlists from the user library.
-These playlists will be used as a reference list.
+Searches through cached playlists and finds the best ones.
+
+A list of your favorite tracks is used to find the best playlists.
+A regular expression is configured in the settings.toml file to search for your favorite playlists. By default, these are all playlists whose name starts with "= " or "#SYNC " (for examle, "= My best music".
+A list of listened tracks is also used. If a track is in the list of listened, but it is not in your favorite playlists, the algorithm will assume that you did not like the track, and this will affect the selection of tracks.
+
+If you don't pass any parameters, the algorithm will download the best playlists based on your entire library. However, you can specify which playlists are considered reference. Then the algorithm will look for the most similar ones. For example, you can find playlists that correspond only to a certain style, but not to all styles that are in your library.
+To specify which playlists to consider as reference, use --ref and --ref-id parameters.
+
+Example:
+spoty plug collector cache-find-best --fn "female" "^= RAP|^#SYNC RAP"
+
     """
+    ref_playlist_ids = spoty.utils.tuple_to_list(ref_id)
+
     lib = col.get_user_library()
-    ref_playlist_ids = []
-    for playlist in lib.all_playlists:
-        if re.findall(ref_regex, playlist['name']):
-            ref_playlist_ids.append(playlist['id'])
-    if len(ref_playlist_ids) == 0:
-        click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
-        exit()
+
+    if ref:
+        for playlist in lib.all_playlists:
+            if re.findall(ref, playlist['name']):
+                ref_playlist_ids.append(playlist['id'])
+        if len(ref_playlist_ids) == 0:
+            click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
+            exit()
+
     infos, tracks_total, unique_tracks = cache.cache_find_best(lib, ref_playlist_ids, min_not_listened,
                                                                min_listened,
                                                                min_ref_percentage, min_ref_tracks, sorting,
@@ -634,62 +541,6 @@ These playlists will be used as a reference list.
         click.echo("\n")
         cache.sub_top_playlists_from_cache(infos, subscribe_count, subscribe_group)
 
-
-@collector.command("cache-find-best-ref-id")
-@click.option('--min-listened', '--ml', type=int, default=0, show_default=True,
-              help='Skip the playlist if the number of listened tracks is less than the given value.')
-@click.option('--min-not-listened', '--mnl', type=int, default=1, show_default=True,
-              help='Skip the playlist if the number of not listened tracks is less than the given value.')
-@click.option('--min-ref-percentage', '--mrp', type=int, default=0, show_default=True,
-              help='Skip the playlist if the number reference percentage is less than the given value.')
-@click.option('--min-ref-tracks', '--mrt', type=int, default=1, show_default=True,
-              help='Skip the playlist if the number reference tracks is less than the given value.')
-@click.option('--listened-accuracy', '--la', type=int, default=100, show_default=True,
-              help='The number of fav-points will decrease if the number of listened tracks is lower than the specified. '
-                   'Set it to 1000, for example, if you want to increase the fav-points accuracy and have longer playlists in the selection.')
-@click.option('--fav_weight', '--fw', type=float, default=1, show_default=True,
-              help='The weight of fav_points, which affects the final points score.')
-@click.option('--ref_weight', '--rw', type=float, default=1, show_default=True,
-              help='The weight of ref_points, which affects the final points score.')
-@click.option('--prob_weight', '--pw', type=float, default=1, show_default=True,
-              help='The weight of prob_points, which affects the final points score.')
-@click.option('--limit', type=int, default=1000, show_default=True,
-              help='Limit the number of printed playlists.')
-@click.option('--sorting', '--s', default="points",
-              type=click.Choice(
-                  ['fav-number', 'fav-percentage',
-                   'ref-number', 'ref-percentage',
-                   'list-number', 'list-percentage',
-                   'track-number',
-                   'fav-points', 'ref-points', 'prob-points', 'points'],
-                  case_sensitive=False),
-              help='Sort resulting list by selected value.')
-@click.option('--reverse-sorting', '-r', is_flag=True,
-              help='Reverse sorting.')
-@click.option('--filter-names',
-              help='Get only playlists whose names matches this regex filter')
-@click.option('--subscribe-count', '--sub', type=int, default=0, show_default=True,
-              help='Add playlists to library. Specify how many top playlists to add. Small playlists will be merged into one playlist with approximately 100 tracks.')
-@click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP,
-              show_default=True,
-              help='Group playlists under a given name for convenience. Used in conjunction with --subscribe-count.')
-@click.argument("playlist_ids", nargs=-1)
-def cache_find_best_ref_id(playlist_ids, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
-                           sorting, reverse_sorting, filter_names, listened_accuracy, fav_weight, ref_weight,
-                           prob_weight, subscribe_count, subscribe_group):
-    """
-Among the cached playlists, find those that contain the most tracks from the reference list.
-Provide playlist IDs or  URIs as argument to get playlists from user library.
-These playlists will be used as a reference list.
-    """
-    lib = col.get_user_library()
-    ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    infos, tracks_total, unique_tracks = cache.cache_find_best(lib, ref_playlist_ids, min_not_listened,
-                                                               min_listened,
-                                                               min_ref_percentage, min_ref_tracks, sorting,
-                                                               reverse_sorting, filter_names, listened_accuracy,
-                                                               fav_weight, ref_weight, prob_weight)
-    print_playlist_infos(infos, limit)
 
 
 @collector.command("stats")
