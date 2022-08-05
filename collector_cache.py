@@ -64,17 +64,17 @@ def get_cached_playlists_dict(use_library_dir=False):
     return res
 
 
-def cache_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False):
+def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False):
     playlists = spotify_api.find_playlist_by_query(search_query, limit)
     ids = []
     for playlist in playlists:
         ids.append(playlist['id'])
 
-    new, old, all_old = cache_by_ids(ids, use_library_dir, overwrite_exist)
+    new, old, all_old = cache_add_by_ids(ids, use_library_dir, overwrite_exist)
     return new, old, all_old
 
 
-def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False):
+def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False):
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
     cached_playlists = get_cached_playlists_dict(use_library_dir)
@@ -385,7 +385,7 @@ def cache_user_library(only_new=False):
     all_playlists = spotify_api.get_list_of_playlists()
     for playlist in all_playlists:
         ids.append(playlist['id'])
-    new_playlists, exist_playlists, cached_playlists = cache_by_ids(ids, True, not only_new, True)
+    new_playlists, exist_playlists, cached_playlists = cache_add_by_ids(ids, True, not only_new, True)
     return new_playlists, exist_playlists, cached_playlists
 
 

@@ -406,18 +406,23 @@ def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None
 
 
 
-@collector.command("cache-by-name")
+@collector.command("cache-add")
 @click.option('--overwrite', '-o', is_flag=True,
               help='Overwrite exist cached playlists.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of processed playlists (max 1000 due to spotify api limit).')
 @click.argument("search_query")
-def cache_by_name(search_query, limit, overwrite):
+def cache_add(search_query, limit, overwrite):
     """
+\b
 Find public playlists by specified search query and cache them (save to csv files on disk).
+
+\b
+Example:
+spoty plug collector cache-add "jazz"
     """
 
-    new, old, all_old = cache.cache_by_name(search_query, limit, False, overwrite)
+    new, old, all_old = cache.cache_add_by_name(search_query, limit, False, overwrite)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
@@ -425,17 +430,17 @@ Find public playlists by specified search query and cache them (save to csv file
     click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
 
 
-@collector.command("cache-by-id")
+@collector.command("cache-add-id")
 @click.option('--overwrite', '-o', is_flag=True,
               help='Overwrite exist cached playlists.')
 @click.argument("playlist_ids", nargs=-1)
-def cache_by_ids(playlist_ids, overwrite):
+def cache_add_id(playlist_ids, overwrite):
     """
 Cache playlist with specified id (save to csv files on disk).
     """
 
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new, old, all_old = cache.cache_by_ids(playlist_ids, False, overwrite)
+    new, old, all_old = cache.cache_add_by_ids(playlist_ids, False, overwrite)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
@@ -497,21 +502,28 @@ Provide playlist IDs or  URIs as argument.
               help='Regular expression to take reference playlists from the library.')
 @click.option('--ref-id', '--rid', type=str, multiple=True,
               help='IDs or URIs to take reference playlists from the library.')
-def cache_find_best(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
+def find_best_in_cache(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
                         sorting, reverse_sorting, listened_accuracy, fav_weight, ref_weight, prob_weight,
                         subscribe_count, subscribe_group,ref,ref_id):
     """
 Searches through cached playlists and finds the best ones.
 
+\b
 A list of your favorite tracks is used to find the best playlists.
 A regular expression is configured in the settings.toml file to search for your favorite playlists. By default, these are all playlists whose name starts with "= " or "#SYNC " (for examle, "= My best music".
 A list of listened tracks is also used. If a track is in the list of listened, but it is not in your favorite playlists, the algorithm will assume that you did not like the track, and this will affect the selection of tracks.
 
+\b
 If you don't pass any parameters, the algorithm will download the best playlists based on your entire library. However, you can specify which playlists are considered reference. Then the algorithm will look for the most similar ones. For example, you can find playlists that correspond only to a certain style, but not to all styles that are in your library.
 To specify which playlists to consider as reference, use --ref and --ref-id parameters.
 
+The best playlists can be added to your library. To do this, use --sub and --group parameters. Mirrors in your library will be created for the specified number of the best playlists (to work with mirrors, see commands: --sub, --unsub, --update).
+
+\b
 Example:
-spoty plug collector cache-find-best --fn "female" "^= RAP|^#SYNC RAP"
+spoty plug collector cache-find-best --fn "female" --sub 10 --ref "^= RAP|^#SYNC RAP"
+
+To speed up the library search, you can temporarily cache your library using the command: --library-cache-make
 
     """
     ref_playlist_ids = spoty.utils.tuple_to_list(ref_id)
