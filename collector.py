@@ -885,5 +885,5 @@ def cache_optimize():
     """
 Split large cache folder to smallest folders.
     """
-    cache.cache_optimize()
+    cache.cache_optimize_multi()
     click.echo(f'Cache optimized')

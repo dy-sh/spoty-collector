@@ -41,18 +41,7 @@ if not os.path.isdir(library_cache_dir):
     os.makedirs(library_cache_dir)
 
 
-def get_csv_playlist_id_and_name(csvs_file_name):
-    base_name = os.path.basename(csvs_file_name)
-    base_name = os.path.splitext(base_name)[0]
-    if len(base_name) == 22:
-        id = base_name[:22]
-        name = ""
-        return id, name
-    if len(base_name) > 21:
-        id = base_name[:22]
-        name = base_name[23:]
-        return id, name
-    return None, None
+
 
 
 # [id][0 = playlist_name, 1 - file_name]
@@ -65,7 +54,7 @@ def get_cached_playlists_dict(use_library_dir=False):
 
     with click.progressbar(length=len(csvs_in_path), label=f'Collecting cached playlists') as bar:
         for i, file_name in enumerate(csvs_in_path):
-            id, name = get_csv_playlist_id_and_name(file_name)
+            id, name = csv_playlist.get_csv_playlist_id_and_name(file_name)
             if id is not None and name is not None:
                 res[id] = [name, file_name]
             else:
@@ -173,7 +162,7 @@ def __read_csvs_thread(filenames, counter, result):
     res = []
 
     for i, file_name in enumerate(filenames):
-        playlist_id, playlist_name = get_csv_playlist_id_and_name(file_name)
+        playlist_id, playlist_name = csv_playlist.get_csv_playlist_id_and_name(file_name)
         if playlist_name == "":
             playlist_name = "Unknown"
         tags = csv_playlist.read_tags_from_csv_fast(file_name,
@@ -248,7 +237,7 @@ def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=Fals
         filterd_csvs = []
         with click.progressbar(length=len(csvs_in_path), label=f'Filtering cached playlists') as bar:
             for i, file_name in enumerate(csvs_in_path):
-                id, name = get_csv_playlist_id_and_name(file_name)
+                id, name = csv_playlist.get_csv_playlist_id_and_name(file_name)
                 if id is not None and name is not None:
                     if re.search(params.filter_names.upper(), name.upper()):
                         filterd_csvs.append(file_name)
@@ -327,7 +316,7 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
     total_tracks_count = 0
 
     for i, file_name in enumerate(csv_filenames):
-        playlist_id, playlist_name = get_csv_playlist_id_and_name(file_name)
+        playlist_id, playlist_name = csv_playlist.get_csv_playlist_id_and_name(file_name)
         if playlist_name == "":
             playlist_name = "Unknown"
         tags = csv_playlist.read_tags_from_csv_fast(file_name, ['ISRC', 'ARTIST', 'TITLE'])
@@ -415,7 +404,7 @@ def cache_library_delete():
 
 
 def read_cached_playlist(csv_file_name):
-    playlist_id, playlist_name = get_csv_playlist_id_and_name(csv_file_name)
+    playlist_id, playlist_name = csv_playlist.get_csv_playlist_id_and_name(csv_file_name)
     if playlist_name == "":
         playlist_name = "Unknown"
     tags = csv_playlist.read_tags_from_csv(csv_file_name, False, False, True)
@@ -482,4 +471,74 @@ def cache_optimize():
                 bar.update(1000)
         bar.finish()
 
-    click.echo(f"{len(csvs_in_path)} playlists removed.")
+
+def cache_optimize_multi():
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+
+    if len(csvs_in_path) == 0:
+        click.echo(f"No cached playlists found.")
+        exit()
+
+    # multi thread
+    try:
+        parts = np.array_split(csvs_in_path, THREADS_COUNT)
+        threads = []
+        counters = []
+
+        with click.progressbar(length=len(csvs_in_path),
+                               label=f'Optimizing {len(csvs_in_path)} cached playlists') as bar:
+            # start threads
+            for i, part in enumerate(parts):
+                counter = Value('i', 0)
+                counters.append(counter)
+                playlists_part = list(part)
+                thread = Process(target=__cache_optimize_thread, args=(playlists_part, i, len(parts), counter))
+                threads.append(thread)
+                thread.daemon = True  # This thread dies when main thread exits
+                thread.start()
+
+                # update bar
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+            # waiting for complete
+            while not bar.finished:
+                time.sleep(0.1)
+                total = sum([x.value for x in counters])
+                added = total - bar.pos
+                if added > 0:
+                    bar.update(added)
+
+    except (KeyboardInterrupt, SystemExit):  # aborted by user
+        click.echo()
+        click.echo('Aborted.')
+        sys.exit()
+
+
+def __cache_optimize_thread(csvs_in_path, part_index, parts_count, counter):
+    files_num = 0
+    folder_num = part_index + 1
+    new_path = ""
+    for i, file_name in enumerate(csvs_in_path):
+
+        if files_num == 0:
+            new_path = os.path.join(cache_dir, "cache " + str(folder_num))
+
+            if not os.path.exists(new_path):
+                os.makedirs(new_path)
+
+        base_name = os.path.basename(file_name)
+        new_file_name = os.path.join(new_path, base_name)
+        os.rename(file_name, new_file_name)
+
+        files_num += 1
+        if files_num >= 10000:
+            files_num = 0
+            folder_num += parts_count
+
+        if (i + 1) % 100 == 0:
+            counter.value += 100
+        if i + 1 == len(csvs_in_path):
+            counter.value += (i % 100) + 1
