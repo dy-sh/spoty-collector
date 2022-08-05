@@ -69,20 +69,18 @@ If the name of the mirror is not specified, then the name of each playlist that 
 
 @collector.command("unsub")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--remove-mirror', '-r', is_flag=True,
-              help='Remove mirror playlists from the library.')
-@click.option('--remove-tracks', '-t', is_flag=True,
-              help='Remove tracks in mirror playlists that exist in unsubscribed playlists.')
+@click.option('--do-not-remove', '-r', is_flag=True,
+              help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists and tracks.')
-def unsubscribe(playlist_ids, remove_mirror, remove_tracks, confirm):
+def unsubscribe(playlist_ids, do_not_remove, confirm):
     """
 Unsubscribe from the specified playlists (by playlist ID or URI).
 
-PLAYLIST_IDS - IDs or URIs of subscribed playlists
+PLAYLIST_IDS - IDs or URIs of subscribed playlists or mirror playlists
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, confirm)
+    unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscribed_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
