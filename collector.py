@@ -99,7 +99,7 @@ Unsubscribe from all specified playlists.
               help='Remove tracks in mirror playlists that exist in unsubscribed playlists.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists.')
-def unsubscribe_all(group_name, remove_mirror, remove_tracks, confirm):
+def unsubscribe_group(group_name, remove_mirror, remove_tracks, confirm):
     """
 Unsubscribe from all playlists in specified group.
     """
@@ -838,14 +838,7 @@ These playlists will be used as a reference list.
     print_playlist_infos(infos, limit)
 
 
-@collector.command("cache-unsub")
-@click.argument("group-name", nargs=-1)
-def cache_unsub(group_names):
-    """
-Unsubscribe from subscribed from cache playlist. Delete all mirrors in the library.
-    """
-    group_names = spoty.utils.tuple_to_list(group_names)
-    cache.unsub_playlists_from_cache(group_names)
+
 
 
 @collector.command("cache-stats")
