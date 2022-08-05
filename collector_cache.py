@@ -453,3 +453,33 @@ def get_tracks_from_playlists(playlist_ids: List[str]):
         playlist_ids.append(pl['id'])
 
     return tags, playlist_ids
+
+
+def cache_optimize():
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+
+    if len(csvs_in_path) == 0:
+        click.echo(f"No cached playlists found.")
+        exit()
+
+    with click.progressbar(length=len(csvs_in_path), label=f'Optimizing cached playlists') as bar:
+        files_num = 0
+        folder_num = 1
+        for i, file_name in enumerate(csvs_in_path):
+            if files_num == 0:
+                path = os.path.join(cache_dir, "cache " + str(folder_num))
+                if not os.path.exists(path):
+                    os.makedirs(path)
+            base_name = os.path.basename(file_name)
+            new_file_name = os.path.join(cache_dir, "cache " + str(folder_num), base_name)
+            os.rename(file_name, new_file_name)
+            files_num += 1
+            if files_num >= 10000:
+                files_num = 0
+                folder_num += 1
+
+            if i % 1000 == 0:
+                bar.update(1000)
+        bar.finish()
+
+    click.echo(f"{len(csvs_in_path)} playlists removed.")

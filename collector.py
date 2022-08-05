@@ -878,3 +878,12 @@ Use --cache-library to cache playlists.
     """
     cache.cache_library_delete()
     click.echo(f'Cached library deleted')
+
+
+@collector.command("cache-optimize")
+def cache_optimize():
+    """
+Split large cache folder to smallest folders.
+    """
+    cache.cache_optimize()
+    click.echo(f'Cache optimized')
