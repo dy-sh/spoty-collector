@@ -42,14 +42,18 @@ if not os.path.isdir(library_cache_dir):
 def get_csv_playlist_id_and_name(csvs_file_name):
     base_name = os.path.basename(csvs_file_name)
     base_name = os.path.splitext(base_name)[0]
+    if len(base_name) == 22:
+        id = base_name[:22]
+        name = ""
+        return id, name
     if len(base_name) > 21:
         id = base_name[:22]
         name = base_name[23:]
         return id, name
-    else:
-        return None, None
+    return None, None
 
 
+# [id][0 = playlist_name, 1 - file_name]
 def get_cached_playlists_dict(use_library_dir=False):
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
@@ -60,7 +64,7 @@ def get_cached_playlists_dict(use_library_dir=False):
     with click.progressbar(length=len(csvs_in_path), label=f'Collecting cached playlists') as bar:
         for i, file_name in enumerate(csvs_in_path):
             id, name = get_csv_playlist_id_and_name(file_name)
-            if id and name:
+            if id is not None and name is not None:
                 res[id] = [name, file_name]
             else:
                 click.echo("Invalid cached playlist file name: " + file_name)
@@ -243,7 +247,7 @@ def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=Fals
         with click.progressbar(length=len(csvs_in_path), label=f'Filtering cached playlists') as bar:
             for i, file_name in enumerate(csvs_in_path):
                 id, name = get_csv_playlist_id_and_name(file_name)
-                if id and name:
+                if id is not None and name is not None:
                     if re.search(params.filter_names.upper(), name.upper()):
                         filterd_csvs.append(file_name)
                 else:
@@ -412,9 +416,16 @@ def cache_library_delete():
     click.echo(f"{len(csvs_in_path)} playlists removed.")
 
 
-def is_playlist_cached(id: str, use_library_dir: bool):
-    playlists = get_cached_playlists_dict(use_library_dir)
-    return id in playlists
+def read_cached_playlist(csv_file_name):
+    playlist_id, playlist_name = get_csv_playlist_id_and_name(csv_file_name)
+    if playlist_name == "":
+        playlist_name = "Unknown"
+    tags = csv_playlist.read_tags_from_csv(csv_file_name, False, False, True)
+    pl = {}
+    pl['id'] = playlist_id
+    pl['name'] = playlist_name
+    pl['tracks'] = tags
+    return pl
 
 
 def get_tracks_from_playlists(playlist_ids: List[str]):
@@ -433,14 +444,7 @@ def get_tracks_from_playlists(playlist_ids: List[str]):
     with click.progressbar(length=len(found_ids), label=f'Reading {len(found_ids)} cached playlists') as bar:
         for id in found_ids:
             file_name = cached_playlists[id][1]
-            playlist_id, playlist_name = get_csv_playlist_id_and_name(file_name)
-            if playlist_name == "":
-                playlist_name = "Unknown"
-            tags = csv_playlist.read_tags_from_csv(file_name, False, False, True)
-            pl = {}
-            pl['id'] = playlist_id
-            pl['name'] = playlist_name
-            pl['tracks'] = tags
+            pl = read_cached_playlist(file_name)
             playlists.append(pl)
             bar.update(1)
 

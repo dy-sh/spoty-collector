@@ -773,7 +773,7 @@ These playlists will be used as a reference list.
                                                                    fav_weight, ref_weight, prob_weight)
     print_playlist_infos(infos, limit)
 
-    if subscribe_count > 0:
+    if subscribe_count > 0 and len(infos) > 0:
         if not click.confirm(f'Are you sure you want to add top {subscribe_count} playlists to the library?',
                              abort=True):
             click.echo("\nAborted")
@@ -884,5 +884,3 @@ Use --cache-library to cache playlists.
     """
     cache.cache_library_delete()
     click.echo(f'Cached library deleted')
-
-

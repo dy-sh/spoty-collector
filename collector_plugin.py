@@ -35,7 +35,6 @@ if listened_file_name.startswith("./") or listened_file_name.startswith(".\\"):
 if mirrors_file_name.startswith("./") or mirrors_file_name.startswith(".\\"):
     mirrors_file_name = os.path.join(current_directory, mirrors_file_name)
 
-
 listened_file_name = os.path.abspath(listened_file_name)
 mirrors_file_name = os.path.abspath(mirrors_file_name)
 
@@ -404,9 +403,6 @@ def list_playlists(fast=True, group: str = None):
     click.echo(f'Total {len(all_playlists)} subscribed playlists in {mirrors_count} mirrors.')
 
 
-
-
-
 def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=None):
     mirrors = read_mirrors(group)
     if len(mirrors) == 0:
@@ -432,8 +428,7 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
 
     mirrors_dict = get_mirrors_dict(mirrors)
 
-    cached_playlists = get_cached_playlists_dict()
-    exit()
+    cached_playlists = cache.get_cached_playlists_dict()
 
     with click.progressbar(length=len(subs) + 1,
                            label=f'Updating {len(subs)} subscribed playlists') as bar:
@@ -453,7 +448,10 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
                 new_tracks = []
                 for m in mirrors:
                     if m.from_cache:
-                        sub_playlist = cache.read_cached_playlists()
+                        csv_file_name = cached_playlists[m.playlist_id][1]
+                        sub_playlist = cache.read_cached_playlist(csv_file_name)
+                        new_tracks.extend(sub_playlist['tracks'])
+                        all_sub_tracks.extend(sub_playlist['tracks'])
                     else:
                         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
                         if sub_playlist is not None:
@@ -919,8 +917,6 @@ def __get_subscription_info(sub_playlist_id: str, lib: UserLibrary, playlist=Non
     return info
 
 
-
-
 def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tracks_dict, counter, result):
     res = []
 
@@ -934,7 +930,6 @@ def __get_subscription_info_thread(playlists, lib, check_likes, all_listened_tra
         if i + 1 == len(playlists):
             counter.value += (i % 100) + 1
     result.put(res)
-
 
 
 def playlist_info(lib, playlist_ids):
@@ -1037,8 +1032,6 @@ def __get_playlist_info(params: FindBestTracksParams, playlist) -> PlaylistInfo:
     return info
 
 
-
-
 def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo):
     accuracy = np.interp(info.listened_tracks_count, [0, params.listened_accuracy], [0, 1])
     info.fav_points = info.fav_percentage * accuracy
@@ -1048,8 +1041,6 @@ def __calculate_playlist_points(params: FindBestTracksParams, info: PlaylistInfo
     info.points = params.fav_weight * info.fav_points + \
                   params.ref_weight * info.ref_points + \
                   params.prob_weight * info.prob_points
-
-
 
 
 def __is_track_exist_in_collection(col: TracksCollection, id=None, isrc=None, artists=None, title=None):
@@ -1106,5 +1097,3 @@ def __get_prob_good_track_percentage(params: FindBestTracksParams, artists):
     if best is not None:
         return best
     return 0.5
-
-
