@@ -35,15 +35,14 @@ Prints configuration parameters.
 
 
 @collector.command("sub")
-@click.argument("playlist_ids", nargs=-1)
 @click.option('--mirror-name', '--n',
               help='A mirror playlist with the specified name will be added to the library. You can subscribe to multiple playlists by merging them into one mirror. If not specified, the playlist name will be used as mirror name.')
-@click.option('--mirror-group', '--g', default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
-              help='Mirror group name. ')
-@click.option('--update', '-u', is_flag=True,
-              help='Execute "update" command for this mirror after subscription.')
-@click.pass_context
-def subscribe(ctx, playlist_ids, mirror_group, mirror_name, update):
+@click.option('--group-name', '--g', default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
+              help='Mirror group name.')
+@click.option('--do-not-update', '-u', is_flag=True,
+              help='Do not update mirror after subscription. Use "update" command to do it later.')
+@click.argument("playlist_ids", nargs=-1)
+def subscribe(playlist_ids, group_name, mirror_name, do_not_update):
     """
 Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
@@ -57,12 +56,15 @@ If NONE is specified as the group name, then the name pattern will not be used. 
 If the name of the mirror is not specified, then the name of each playlist that we subscribe to will be used as the name. If a name is specified, then all listed playlists will use the same mirror name and as a result, they will be merged into one playlist.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, mirror_group)
+    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, group_name)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscribed_playlist_ids(mirrors)
+    click.echo('--------------------------------------')
     click.echo(f'{len(new_subs)} new playlists added to subscriptions (total subscriptions: {len(all_subs)}).')
-    if update:
-        ctx.invoke(update_mirrors, mirror_id=new_mirrors)
+    if not do_not_update and len(new_mirrors) > 0:
+        click.echo('--------------------------------------')
+        click.echo("Updating...")
+        col.update(False, False, new_mirrors)
 
 
 @collector.command("unsub")
@@ -179,7 +181,7 @@ Display a list of mirrors and subscribed playlists.
               help='Update only specified mirrors.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for delete mirror playlist confirmation.')
-def update_mirrors(mirror_group, do_not_remove, confirm, mirror_id):
+def update(mirror_group, do_not_remove, confirm, mirror_id):
     """
 Update all subscriptions.
 
@@ -191,7 +193,6 @@ When executed, the following will happen:
     """
     mirror_ids = spoty.utils.tuple_to_list(mirror_id)
     col.update(not do_not_remove, confirm, mirror_ids, mirror_group)
-
 
 
 @collector.command("del")
@@ -206,9 +207,6 @@ All specified playlists will be processed as listened and deleted.
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     deleted = col.delete(playlist_ids, confirm)
     click.echo(f'{len(deleted)} playlists deleted.')
-
-
-
 
 
 @collector.command("clean")
@@ -340,26 +338,26 @@ Delete duplicates in listened list.
         click.echo(f'No duplicated tracks found (total listened tracks: {total_count}).')
 
 
-@collector.command("like-all-listened")
+@collector.command("all-listened-like")
 @click.pass_context
-def like_all_listened(ctx):
+def all_listened_like(ctx):
     """
 Read listened tracks list and like all tracks in spotify user library.
     """
     ctx.invoke(like_import, file_names=[col.listened_file_name])
 
 
-@collector.command("unlike-all-listened")
+@collector.command("all-listened-unlike")
 @click.pass_context
-def unlike_all_listened(ctx):
+def all_listened_unlike(ctx):
     """
 Read listened tracks list and unlike all tracks in spotify user library.
     """
     ctx.invoke(like_import, file_names=[col.listened_file_name], unlike=True)
 
 
-@collector.command("sort-mirrors-list")
-def sort_mirrors():
+@collector.command("optimize-mirrors-list")
+def optimize_mirrors_list():
     """
 Sort mirrors in the mirrors file and check for subscribed playlist id duplicates.
     """
@@ -405,7 +403,6 @@ def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None
             click.echo(f'{srt[pl_name]} : "{pl_name}"')
 
 
-
 @collector.command("cache-add")
 @click.option('--overwrite', '-o', is_flag=True,
               help='Overwrite exist cached playlists.')
@@ -448,10 +445,11 @@ Cache playlist with specified id (save to csv files on disk).
     click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
 
 
-@collector.command("playlist-info")
+@collector.command("info")
 @click.argument("playlist_ids", nargs=-1)
 def playlist_info(playlist_ids):
     """
+Print info about specified playlists.
 Provide playlist IDs or  URIs as argument.
     """
     lib = col.get_user_library()
@@ -503,8 +501,8 @@ Provide playlist IDs or  URIs as argument.
 @click.option('--ref-id', '--rid', type=str, multiple=True,
               help='IDs or URIs to take reference playlists from the library.')
 def find_best_in_cache(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
-                        sorting, reverse_sorting, listened_accuracy, fav_weight, ref_weight, prob_weight,
-                        subscribe_count, subscribe_group,ref,ref_id):
+                       sorting, reverse_sorting, listened_accuracy, fav_weight, ref_weight, prob_weight,
+                       subscribe_count, subscribe_group, ref, ref_id):
     """
 Searches through cached playlists and finds the best ones.
 
@@ -552,7 +550,6 @@ To speed up the library search, you can temporarily cache your library using the
             exit()
         click.echo("\n")
         cache.sub_top_playlists_from_cache(infos, subscribe_count, subscribe_group)
-
 
 
 @collector.command("stats")

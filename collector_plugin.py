@@ -225,7 +225,7 @@ def subscribe(playlist_ids: list, mirror_name=None, group_name="Mirror", from_ca
 
     mirrors = read_mirrors()
     all_sub_playlist_ids = []
-    all_mirrors_name = []
+    all_new_mirror_names = []
 
     for playlist_id in playlist_ids:
         playlist_name = ""
@@ -266,7 +266,7 @@ def subscribe(playlist_ids: list, mirror_name=None, group_name="Mirror", from_ca
                         break
 
         all_sub_playlist_ids.append(playlist_id)
-        all_mirrors_name.append(new_mirror_name)
+        all_new_mirror_names.append(new_mirror_name)
 
         m = Mirror()
         m.mirror_name = new_mirror_name
@@ -279,7 +279,7 @@ def subscribe(playlist_ids: list, mirror_name=None, group_name="Mirror", from_ca
 
     write_mirrors(mirrors)
 
-    return all_sub_playlist_ids, all_mirrors_name
+    return all_sub_playlist_ids, all_new_mirror_names
 
 
 def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, confirm=False, user_playlists: list = None):
