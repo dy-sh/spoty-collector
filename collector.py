@@ -14,6 +14,7 @@ from spoty import utils
 
 settings = col.settings
 
+
 @click.group("collector")
 def collector():
     """
@@ -46,6 +47,14 @@ def subscribe(ctx, playlist_ids, mirror_group, mirror_name, update):
     """
 Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
+
+The name of the playlist in the library will be formed according to the template:
+MIRROR_PLAYLISTS_PREFIX group_name - playlist_name
+If you do not specify a group name, the default name will be used.
+The default group name and prefix can be configured in the settings.toml file.
+If NONE is specified as the group name, then the name pattern will not be used. In this case, a playlist will be created with the same name as the original one.
+
+If the name of the mirror is not specified, then the name of each playlist that we subscribe to will be used as the name. If a name is specified, then all listed playlists will use the same mirror name and as a result, they will be merged into one playlist.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, mirror_group)
@@ -104,6 +113,7 @@ def unsubscribe_group(group_name, remove_mirror, remove_tracks, confirm):
     """
 Unsubscribe from all playlists in specified group.
     """
+    group_name = group_name.upper()
     mirrors = col.read_mirrors(group_name)
     playlist_ids = col.get_subscribed_playlist_ids(mirrors)
     unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, remove_tracks, confirm)
@@ -665,7 +675,7 @@ Find best public playlist by specified search query.
 
 
 @collector.command("cache-by-name")
-@click.option('--overwrite', '-o', is_flag=False,
+@click.option('--overwrite', '-o', is_flag=True,
               help='Overwrite exist cached playlists.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of processed playlists (max 1000 due to spotify api limit).')
@@ -684,7 +694,7 @@ Find public playlists by specified search query and cache them (save to csv file
 
 
 @collector.command("cache-by-id")
-@click.option('--overwrite', '-o', is_flag=False,
+@click.option('--overwrite', '-o', is_flag=True,
               help='Overwrite exist cached playlists.')
 @click.argument("playlist_ids", nargs=-1)
 def cache_by_ids(playlist_ids, overwrite):
@@ -748,7 +758,8 @@ Provide playlist IDs or  URIs as argument.
               help='Get only playlists whose names matches this regex filter')
 @click.option('--subscribe-count', '--sub', type=int, default=0, show_default=True,
               help='Add playlists to library. Specify how many top playlists to add. Small playlists will be merged into one playlist with approximately 100 tracks.')
-@click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
+@click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP,
+              show_default=True,
               help='Group playlists under a given name for convenience. Used in conjunction with --subscribe-count.')
 @click.argument('ref-regex')
 def cache_find_best_ref(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
@@ -767,11 +778,11 @@ These playlists will be used as a reference list.
     if len(ref_playlist_ids) == 0:
         click.echo(f'No playlists were found in the user library that matched the regular expression filter.')
         exit()
-    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened,
-                                                                   min_listened,
-                                                                   min_ref_percentage, min_ref_tracks, sorting,
-                                                                   reverse_sorting, filter_names, listened_accuracy,
-                                                                   fav_weight, ref_weight, prob_weight)
+    infos, tracks_total, unique_tracks = cache.cache_find_best(lib, ref_playlist_ids, min_not_listened,
+                                                               min_listened,
+                                                               min_ref_percentage, min_ref_tracks, sorting,
+                                                               reverse_sorting, filter_names, listened_accuracy,
+                                                               fav_weight, ref_weight, prob_weight)
     print_playlist_infos(infos, limit)
 
     if subscribe_count > 0 and len(infos) > 0:
@@ -818,7 +829,8 @@ These playlists will be used as a reference list.
               help='Get only playlists whose names matches this regex filter')
 @click.option('--subscribe-count', '--sub', type=int, default=0, show_default=True,
               help='Add playlists to library. Specify how many top playlists to add. Small playlists will be merged into one playlist with approximately 100 tracks.')
-@click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
+@click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP,
+              show_default=True,
               help='Group playlists under a given name for convenience. Used in conjunction with --subscribe-count.')
 @click.argument("playlist_ids", nargs=-1)
 def cache_find_best_ref_id(playlist_ids, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
@@ -831,15 +843,12 @@ These playlists will be used as a reference list.
     """
     lib = col.get_user_library()
     ref_playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    infos, tracks_total, unique_tracks = cache.cache_find_best_ref(lib, ref_playlist_ids, min_not_listened,
-                                                                   min_listened,
-                                                                   min_ref_percentage, min_ref_tracks, sorting,
-                                                                   reverse_sorting, filter_names, listened_accuracy,
-                                                                   fav_weight, ref_weight, prob_weight)
+    infos, tracks_total, unique_tracks = cache.cache_find_best(lib, ref_playlist_ids, min_not_listened,
+                                                               min_listened,
+                                                               min_ref_percentage, min_ref_tracks, sorting,
+                                                               reverse_sorting, filter_names, listened_accuracy,
+                                                               fav_weight, ref_weight, prob_weight)
     print_playlist_infos(infos, limit)
-
-
-
 
 
 @collector.command("cache-stats")
@@ -847,10 +856,12 @@ def cache_stats():
     """
 Cached playlists statistics
     """
-    infos, tracks_total, unique_tracks = cache.cache_find_best_ref("-----IGNORE-----", 0, 0, 0, 0, True)
+    lib = col.get_user_library()
+    params = FindBestTracksParams(lib)
+    infos, total_tracks_count, unique_tracks = cache.get_cached_playlists_info(params, False, True)
     click.echo("\n======================================================================\n")
     click.echo(f'Cached playlists: {len(infos)}')
-    click.echo(f'Tracks total in playlists: {tracks_total}')
+    click.echo(f'Tracks total in playlists: {total_tracks_count}')
     click.echo(f'Total unique tracks: {len(unique_tracks)}')
 
 

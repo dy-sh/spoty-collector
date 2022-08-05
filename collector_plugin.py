@@ -60,7 +60,10 @@ REDUCE_IGNORE_PLAYLISTS = settings.COLLECTOR.REDUCE_IGNORE_PLAYLISTS
 REDUCE_IF_NOT_UPDATED_DAYS = settings.COLLECTOR.REDUCE_IF_NOT_UPDATED_DAYS
 
 
-def read_mirrors(group: str = None) -> List[Mirror]:
+def read_mirrors(group_name: str = None) -> List[Mirror]:
+    if group_name is not None:
+        group_name = group_name.upper()
+
     if not os.path.isfile(mirrors_file_name):
         return []
     with open(mirrors_file_name, 'r', encoding='utf-8-sig') as file:
@@ -77,7 +80,7 @@ def read_mirrors(group: str = None) -> List[Mirror]:
             m.group = line.split(',')[2]
             m.mirror_name = line.split(',', 3)[3]
 
-            if group is None or group == m.group:
+            if group_name is None or group_name == m.group:
                 mirrors.append(m)
 
         return mirrors
@@ -208,7 +211,11 @@ def get_not_listened_tracks(tracks: list, show_progressbar=False, all_listened_t
     return new_tracks, listened_tracks
 
 
-def subscribe(playlist_ids: list, mirror_name=None, group="main", from_cache=False, prevent_dup_mirror_name=False):
+def subscribe(playlist_ids: list, mirror_name=None, group_name="Mirror", from_cache=False,
+              prevent_dup_mirror_name=False):
+    if group_name is not None:
+        group_name = group_name.upper()
+
     mirrors = read_mirrors()
     all_sub_playlist_ids = []
     all_mirrors_name = []
@@ -231,7 +238,13 @@ def subscribe(playlist_ids: list, mirror_name=None, group="main", from_cache=Fal
             click.echo(f'"{playlist_name}" ({playlist_id}) playlist skipped. Already subscribed.')
             continue
 
-        new_mirror_name = mirror_name if mirror_name is not None else playlist_name
+        new_mirror_name = ""
+        if group_name != "" and group_name != " " and group_name.upper() != "NONE":
+            new_mirror_name = mirror_playlist_prefix + group_name + " - "
+        if mirror_name is not None:
+            new_mirror_name += mirror_name
+        else:
+            new_mirror_name += playlist_name
 
         if prevent_dup_mirror_name:
             mirrors_dict = {}
@@ -251,7 +264,7 @@ def subscribe(playlist_ids: list, mirror_name=None, group="main", from_cache=Fal
         m = Mirror()
         m.mirror_name = new_mirror_name
         m.from_cache = from_cache
-        m.group = group
+        m.group = group_name.upper()
         m.playlist_id = playlist_id
         mirrors.append(m)
 
@@ -382,14 +395,17 @@ def unsubscribe_mirrors_by_name(mirror_names, remove_mirrors, confirm):
     return all_unsubscribed
 
 
-def list_playlists(fast=True, group: str = None):
-    mirrors = read_mirrors(group)
+def list_playlists(fast=True, group_name: str = None):
+    if group_name is not None:
+        group_name = group_name.upper()
+
+    mirrors = read_mirrors(group_name)
     all_playlists = get_subscribed_playlist_ids(mirrors)
     mirrors_dict = get_mirrors_dict(mirrors)
     mirrors_count = 0
 
-    for group, mirrors_in_grp in mirrors_dict.items():
-        click.echo(f'\n============================= Group "{group}" =================================')
+    for group_name, mirrors_in_grp in mirrors_dict.items():
+        click.echo(f'\n============================= Group "{group_name}" =================================')
         for mirror_name, mirrors in mirrors_in_grp.items():
             mirrors_count += 1
             click.echo(f'\n"{mirror_name}":')
@@ -406,8 +422,11 @@ def list_playlists(fast=True, group: str = None):
     click.echo(f'Total {len(all_playlists)} subscribed playlists in {mirrors_count} mirrors.')
 
 
-def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=None):
-    mirrors = read_mirrors(group)
+def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group_name=None):
+    if group_name is not None:
+        group_name = group_name.upper()
+
+    mirrors = read_mirrors(group_name)
     if len(mirrors) == 0:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
         exit()
@@ -435,7 +454,7 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
 
     with click.progressbar(length=len(subs) + 1,
                            label=f'Updating {len(subs)} subscribed playlists') as bar:
-        for group, mirrors_in_grp in mirrors_dict.items():
+        for group_name, mirrors_in_grp in mirrors_dict.items():
             for mirror_name, mirrors in mirrors_in_grp.items():
                 # get mirror playlist
                 mirror_playlist_id = None
@@ -717,12 +736,15 @@ def sort_mirrors():
             playlist_ids.append(m.playlist_id)
 
 
-def reduce_mirrors(check_update_date=True, unsub=True, mirror_group: str = None, confirm=False):
+def reduce_mirrors(check_update_date=True, unsub=True, group_name: str = None, confirm=False):
+    if group_name is not None:
+        group_name = group_name.upper()
+
     all_unsubscribed = []
     all_not_listened = []
     all_ignored = []
 
-    infos = get_all_subscriptions_info(mirror_group)
+    infos = get_all_subscriptions_info(group_name)
     user_playlists = spotify_api.get_list_of_playlists()
 
     res_infos = []
@@ -765,8 +787,11 @@ def reduce_mirrors(check_update_date=True, unsub=True, mirror_group: str = None,
     return res_infos, all_not_listened, all_unsubscribed, all_ignored
 
 
-def get_all_subscriptions_info(mirror_group: str = None) -> List[SubscriptionInfo]:
-    lib = get_user_library(mirror_group)
+def get_all_subscriptions_info(group_name: str = None) -> List[SubscriptionInfo]:
+    if group_name is not None:
+        group_name = group_name.upper()
+
+    lib = get_user_library(group_name)
     infos = []
 
     with click.progressbar(lib.subscribed_playlist_ids,
@@ -801,10 +826,13 @@ def __calculate_artists_rating(lib: UserLibrary):
         lib.artists_rating[artist] = rating
 
 
-def get_user_library(mirror_group: str = None, filter_names=None, add_fav_to_listened=True) -> UserLibrary:
+def get_user_library(group_name: str = None, filter_names=None, add_fav_to_listened=True) -> UserLibrary:
+    if group_name is not None:
+        group_name = group_name.upper()
+
     lib = UserLibrary()
 
-    lib.mirrors = read_mirrors(mirror_group)
+    lib.mirrors = read_mirrors(group_name)
     lib.subscribed_playlist_ids = get_subscribed_playlist_ids(lib.mirrors)
 
     listened_tracks = read_listened_tracks()

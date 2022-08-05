@@ -1,6 +1,7 @@
 from typing import List
 from datetime import datetime, timedelta
 
+
 class TracksCollection:
     tracks: List
     track_ids: dict
@@ -170,4 +171,4 @@ class FindBestTracksParams:
         self.fav_weight = 1
         self.ref_weight = 1
         self.prob_weight = 1
-
+        self.filter_names = None

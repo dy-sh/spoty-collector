@@ -41,9 +41,6 @@ if not os.path.isdir(library_cache_dir):
     os.makedirs(library_cache_dir)
 
 
-
-
-
 # [id][0 = playlist_name, 1 - file_name]
 def get_cached_playlists_dict(use_library_dir=False):
     read_dir = library_cache_dir if use_library_dir else cache_dir
@@ -95,11 +92,14 @@ def cache_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, wri
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist_id in bar:
-            playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
+            playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id, False)
             if playlist is None:
                 continue
             tracks = playlist["tracks"]["items"]
             tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+            tags_list = utils.get_only_tags(tags_list,
+                                            ['SPOTY_LENGTH', 'SPOTIFY_TRACK_ID', 'SPOTIFY_ALBUM_ID', 'ISRC', 'ARTIST',
+                                             'TITLE', 'ALBUM', 'YEAR'])
             file_name = playlist['id'] + " " + playlist['name']
             if len(file_name) > 120:
                 file_name = (file_name[:120] + '..')
@@ -180,9 +180,9 @@ def __read_csvs_thread(filenames, counter, result):
     result.put(res)
 
 
-def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
-                        min_ref_percentage=0, min_ref_tracks=1, sorting="fav-number", reverse_sorting=False,
-                        filter_names=None, listened_accuracy=100, fav_weight=1, ref_weight=1, prob_weight=1):
+def cache_find_best(lib: UserLibrary, ref_playlist_ids: List[str], min_not_listened=0, min_listened=0,
+                    min_ref_percentage=0, min_ref_tracks=1, sorting="points", reverse_sorting=False,
+                    filter_names=None, listened_accuracy=100, fav_weight=1, ref_weight=1, prob_weight=1):
     playlist_ids = []
     for ref_playlist_ids in ref_playlist_ids:
         playlist_id = spotify_api.parse_playlist_id(ref_playlist_ids)
@@ -228,7 +228,8 @@ def cache_find_best_ref(lib: UserLibrary, ref_playlist_ids: List[str], min_not_l
     return infos, total_tracks_count, unique_tracks
 
 
-def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=False) -> [List[PlaylistInfo], int, int]:
+def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=False, include_unique_tracks=False) -> [
+    List[PlaylistInfo], int, int]:
     read_dir = library_cache_dir if use_library_dir else cache_dir
     click.echo("Reading cache playlists directory")
     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
@@ -270,7 +271,7 @@ def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=Fals
                 counters.append(counter)
                 playlists_part = list(part)
                 thread = Process(target=__get_playlist_info_thread,
-                                 args=(playlists_part, params, counter, results, False))
+                                 args=(playlists_part, params, counter, results, include_unique_tracks))
                 threads.append(thread)
                 thread.daemon = True  # This thread dies when main thread exits
                 thread.start()
@@ -334,12 +335,12 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
                     # if artist not in playlist['artists']:
                     #     playlist['artists'][artist] = {}
                     # playlist['artists'][artist][tag['TITLE']] = None
+                if include_unique_tracks:
+                    unique_tracks[tag['ISRC']] = None
 
         info = col.__get_playlist_info(params, playlist)
 
         total_tracks_count += len(tags)
-        if include_unique_tracks:
-            unique_tracks |= tags
 
         if info is not None:
             if params.min_not_listened <= 0 or info.tracks_count - info.listened_tracks_count >= params.min_not_listened:
