@@ -339,7 +339,7 @@ def unsubscribe(sub_playlist_ids: list, remove_mirrors=False, confirm=False, use
 def unsubscribe_all(remove_mirror=False, confirm=False):
     mirrors = read_mirrors()
     subs = get_subscribed_playlist_ids(mirrors)
-    unsubscribed = unsubscribe(subs, remove_mirror, False, confirm)
+    unsubscribed = unsubscribe(subs, remove_mirror, confirm)
     return unsubscribed
 
 
@@ -361,7 +361,7 @@ def unsubscribe_mirrors_by_id(mirror_playlist_ids: list, remove_mirrors=False, c
         if len(subs) == 0:
             click.echo(f'Playlist "{mirror_name}" ({playlist_id}) is not a mirror playlist.')
             continue
-        unsubscribed = unsubscribe(subs, remove_mirrors, False, confirm, user_playlists)
+        unsubscribed = unsubscribe(subs, remove_mirrors, confirm, user_playlists)
         all_unsubscribed.extend(unsubscribed)
     return all_unsubscribed
 
@@ -380,7 +380,7 @@ def unsubscribe_mirrors_by_name(mirror_names, remove_mirrors, confirm):
             click.echo(f'Mirror "{mirror_name}" was not found in the mirrors list.')
             continue
 
-        unsubscribed = unsubscribe(subs, remove_mirrors, False, confirm, user_playlists)
+        unsubscribed = unsubscribe(subs, remove_mirrors, confirm, user_playlists)
         all_unsubscribed.extend(unsubscribed)
     return all_unsubscribed
 
@@ -663,30 +663,16 @@ def clean_playlists(playlist_ids, no_empty_playlists=False, no_liked_tracks=Fals
 
 
 def delete(playlist_ids, confirm):
-    all_tags_list = []
-    all_liked_tracks = []
-    all_deleted_playlists = []
+    deleted = []
 
     for playlist_id in playlist_ids:
-        playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
-        if playlist is None:
-            click.echo(f'  Playlist "{playlist_id}" not found.')
-            continue
-
-        tracks = playlist["tracks"]["items"]
-        tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
-        all_tags_list.extend(tags_list)
-
-        liked_tags_list, not_liked_tags_list = spotify_api.get_liked_tags_list(tags_list)
-        all_liked_tracks.extend(liked_tags_list)
+        process_listened_playlist(playlist_id,False,False,confirm)
 
         res = spotify_api.delete_playlist(playlist_id, confirm)
         if res:
-            all_deleted_playlists.append(playlist_id)
+            deleted.append(playlist_id)
 
-    added_tracks, already_listened_tracks = add_tracks_to_listened(all_liked_tracks, True)
-
-    return all_tags_list, all_liked_tracks, all_deleted_playlists, added_tracks, already_listened_tracks
+    return deleted
 
 
 def sort_mirrors():
@@ -701,56 +687,6 @@ def sort_mirrors():
         else:
             playlist_ids.append(m.playlist_id)
 
-
-def reduce_mirrors(check_update_date=True, unsub=True, group_name: str = None, confirm=False):
-    if group_name is not None:
-        group_name = group_name.upper()
-
-    all_unsubscribed = []
-    all_not_listened = []
-    all_ignored = []
-
-    infos = get_all_subscriptions_info(group_name)
-    user_playlists = spotify_api.get_list_of_playlists()
-
-    res_infos = []
-    for info in infos:
-        if info.playlist["id"] in REDUCE_IGNORE_PLAYLISTS:
-            all_ignored.append(info.playlist["id"])
-            continue
-
-        if len(info.listened_tracks) == 0 or len(info.listened_tracks) < REDUCE_MINIMUM_LISTENED_TRACKS:
-            all_not_listened.append(info.playlist)
-            continue
-
-        res_infos.append(info)
-
-        if unsub:
-            removed = False
-            if info.fav_percentage < REDUCE_PERCENTAGE_OF_GOOD_TRACKS:
-                click.echo(
-                    f'\n"{info.playlist["name"]}" ({info.playlist["id"]}) playlist has only {len(info.fav_tracks)} '
-                    f'favorite from {len(info.listened_tracks)} listened tracks (total tracks: {len(info.tracks)}).')
-                if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
-                    unsubscribe([info.playlist['id']], False, True, False, user_playlists)
-                    all_unsubscribed.append(info.playlist['id'])
-                    removed = True
-
-            if check_update_date and not removed:
-                if len(info.listened_tracks) == len(info.tracks):
-                    specified_date = datetime.today() - timedelta(days=REDUCE_IF_NOT_UPDATED_DAYS)
-                    # filtered = utils.filter_added_after_date(sub_tags_list, str(date))
-                    if info.last_update < specified_date:
-                        days = (datetime.today() - info.last_update).days
-                        if days < 10000:  # some tracks have 1970 year added!
-                            click.echo(
-                                f'\n"{info.playlist["name"]}" ({info.playlist["id"]}) playlist not updated {days} days.')
-                            if confirm or click.confirm("Do you want to unsubscribe from this playlist?"):
-                                unsubscribe([info.playlist['id']], False, True, False, user_playlists)
-                                all_unsubscribed.append(info.playlist['id'])
-                                removed = True
-
-    return res_infos, all_not_listened, all_unsubscribed, all_ignored
 
 
 def get_all_subscriptions_info(group_name: str = None) -> List[SubscriptionInfo]:
