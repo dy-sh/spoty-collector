@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import List
 from spoty import utils
 
+settings = col.settings
 
 @click.group("collector")
 def collector():
@@ -36,7 +37,7 @@ Prints configuration parameters.
 @click.argument("playlist_ids", nargs=-1)
 @click.option('--mirror-name', '--n',
               help='A mirror playlist with the specified name will be added to the library. You can subscribe to multiple playlists by merging them into one mirror. If not specified, the playlist name will be used as mirror name.')
-@click.option('--mirror-group', '--g', default="main", show_default=True,
+@click.option('--mirror-group', '--g', default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
               help='Mirror group name. ')
 @click.option('--update', '-u', is_flag=True,
               help='Execute "update" command for this mirror after subscription.')
@@ -747,7 +748,7 @@ Provide playlist IDs or  URIs as argument.
               help='Get only playlists whose names matches this regex filter')
 @click.option('--subscribe-count', '--sub', type=int, default=0, show_default=True,
               help='Add playlists to library. Specify how many top playlists to add. Small playlists will be merged into one playlist with approximately 100 tracks.')
-@click.option('--subscribe-group', '--group', type=str, default="Listen", show_default=True,
+@click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
               help='Group playlists under a given name for convenience. Used in conjunction with --subscribe-count.')
 @click.argument('ref-regex')
 def cache_find_best_ref(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
@@ -817,7 +818,7 @@ These playlists will be used as a reference list.
               help='Get only playlists whose names matches this regex filter')
 @click.option('--subscribe-count', '--sub', type=int, default=0, show_default=True,
               help='Add playlists to library. Specify how many top playlists to add. Small playlists will be merged into one playlist with approximately 100 tracks.')
-@click.option('--subscribe-group', '--group', type=str, default="Listen", show_default=True,
+@click.option('--subscribe-group', '--group', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
               help='Group playlists under a given name for convenience. Used in conjunction with --subscribe-count.')
 @click.argument("playlist_ids", nargs=-1)
 def cache_find_best_ref_id(playlist_ids, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,

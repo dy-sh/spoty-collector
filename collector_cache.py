@@ -390,10 +390,6 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
             added_playlists += 1
 
 
-def unsub_playlists_from_cache(group: str):
-    pass
-
-
 def cache_user_library(only_new=False):
     ids = []
     all_playlists = spotify_api.get_list_of_playlists()

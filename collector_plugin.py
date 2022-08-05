@@ -41,6 +41,7 @@ mirrors_file_name = os.path.abspath(mirrors_file_name)
 THREADS_COUNT = settings.COLLECTOR.THREADS_COUNT
 
 mirror_playlist_prefix = settings.COLLECTOR.MIRROR_PLAYLISTS_PREFIX
+default_mirror_group = settings.COLLECTOR.DEFAULT_MIRROR_GROUP
 
 LISTENED_LIST_TAGS = [
     'SPOTY_LENGTH',
