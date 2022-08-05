@@ -894,7 +894,7 @@ Use --cache-library to cache playlists.
 @collector.command("cache-optimize")
 def cache_optimize():
     """
-Split large cache folder to smallest folders.
+Split large cache folder to smallest folder for better performance.
     """
     cache.cache_optimize_multi()
     click.echo(f'Cache optimized')
