@@ -448,10 +448,13 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group=Non
                 new_tracks = []
                 for m in mirrors:
                     if m.from_cache:
-                        csv_file_name = cached_playlists[m.playlist_id][1]
-                        sub_playlist = cache.read_cached_playlist(csv_file_name)
-                        new_tracks.extend(sub_playlist['tracks'])
-                        all_sub_tracks.extend(sub_playlist['tracks'])
+                        if m.playlist_id in cached_playlists:
+                            csv_file_name = cached_playlists[m.playlist_id][1]
+                            sub_playlist = cache.read_cached_playlist(csv_file_name)
+                            new_tracks.extend(sub_playlist['tracks'])
+                            all_sub_tracks.extend(sub_playlist['tracks'])
+                        else:
+                            click.echo(f"\nCant update mirror playlist {m.playlist_id}. CSV file not found in cache directory.")
                     else:
                         sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
                         if sub_playlist is not None:
