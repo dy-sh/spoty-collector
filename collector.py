@@ -88,15 +88,15 @@ PLAYLIST_IDS - IDs or URIs of subscribed playlists or mirror playlists
 
 
 @collector.command("unsub-all")
-@click.option('--remove-mirror', '-r', is_flag=True,
-              help='Remove mirror playlists from the library.')
+@click.option('--do-not-remove', '-r', is_flag=True,
+              help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists.')
-def unsubscribe_all(remove_mirror, confirm):
+def unsubscribe_all(do_not_remove, confirm):
     """
 Unsubscribe from all specified playlists.
     """
-    unsubscribed = col.unsubscribe_all(remove_mirror, confirm)
+    unsubscribed = col.unsubscribe_all(not do_not_remove, confirm)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscribed_playlist_dict(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')

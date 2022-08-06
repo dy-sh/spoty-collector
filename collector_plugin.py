@@ -398,10 +398,10 @@ def unsubscribe_mirrors_by_id(mirror_playlist_ids: list, remove_mirrors=False, c
     return all_unsubscribed
 
 
-def unsubscribe_all(remove_mirror=False, confirm=False):
+def unsubscribe_all(remove_mirrors=True, confirm=False):
     mirrors = read_mirrors()
     subs = get_subscribed_playlist_dict(mirrors)
-    unsubscribed = unsubscribe(subs, remove_mirror, confirm)
+    unsubscribed = unsubscribe(subs, remove_mirrors, confirm)
     return unsubscribed
 
 
