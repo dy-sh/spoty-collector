@@ -40,7 +40,6 @@ default_mirror_group = settings.COLLECTOR.DEFAULT_MIRROR_GROUP
 PLAYLISTS_WITH_FAVORITES = settings.COLLECTOR.PLAYLISTS_WITH_FAVORITES
 
 
-
 def read_mirrors(group_name: str = None) -> dict[str, Mirror]:
     if group_name is not None:
         group_name = group_name.upper()
@@ -206,94 +205,55 @@ def get_playlist_id_by_name(playlist_name: str, user_playlists: list = None):
     return None
 
 
-
-
-
 # id - subscribed playlist id or mirror playlist id
-def find_mirror_by_id(playlist_id: str, mirrors: dict[str,Mirror], user_playlists: List) -> Mirror:
+def find_mirror_by_id(playlist_id: str, mirrors: dict[str, Mirror], user_playlists: List) -> Mirror:
     # search playlist id mirrors list
     for m in mirrors.values():
-        if playlist_id == m.playlist_id:
-            return m
+        for id in m.subscribed_playlist_ids:
+            if id == playlist_id:
+                return m
 
-            # search playlist id user library
+    # search playlist id user library
     for playlist in user_playlists:
         if playlist['id'] == playlist_id:
             mirror_name = playlist['name']
-            for m in mirrors:
-                if m.mirror_name == mirror_name:
-                    return m
+            if mirror_name in mirrors:
+                return mirrors[mirror_name]
 
     return None
 
 
 def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, user_playlists: list = None):
     mirrors = read_mirrors()
-    mirrors_dict = mirrors_dict_by_sub_playlist_ids(mirrors)
 
     unsubscribed = []
-    removed_playlists = []
+    removed = []
 
     if user_playlists is None:
         user_playlists = spotify_api.get_list_of_playlists()
+    find_mirror_playlists_in_library(mirrors,user_playlists)
 
     for playlist_id in playlist_ids:
         playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
-        mirror_playlist_id = None
-        mirror_name = ""
-        skip_deleting = False
-        found = False
+        m = find_mirror_by_id(playlist_id, mirrors, user_playlists)
+        if m is None:
+            click.echo(f'Mirror {playlist_id} not found. Skipped.')
+            continue
 
-        # search playlist id mirrors list
-        if playlist_id in mirrors_dict:
-            found = True
-            m = mirrors_dict[playlist_id]
-            mirror_playlist_id = get_playlist_id_by_name(m.mirror_name, user_playlists)
-            mirror_name = m.mirror_name
-            # check if any other mirrors exist with same name
-            mirror_playlist_ids = mirrors[mirror_name].subscribed_playlist_ids
-            if len(mirror_playlist_ids) > 1:
-                skip_deleting = True
-            # remove mirrors from list
-            remain_mirrors = []
-            for m in mirrors:
-                if m.playlist_id == playlist_id:
-                    unsubscribed.append(m)
-                    click.echo(f'Unsubscribed from playlist "{m.mirror_name}" ({playlist_id}).')
-                else:
-                    remain_mirrors.append(m)
-            mirrors = remain_mirrors
+        if playlist_id in m.subscribed_playlist_ids:
+            m.subscribed_playlist_ids.remove(playlist_id)
 
-        # search playlist id user library
-        if not found:
-            for playlist in user_playlists:
-                if playlist['id'] == playlist_id:
-                    found = True
-                    mirror_name = playlist['name']
-                    mirror_playlist_id = playlist_id
-                    # remove mirrors from list
-                    remain_mirrors = []
-                    for m in mirrors:
-                        if m.mirror_name == mirror_name:
-                            unsubscribed.append(m)
-                            click.echo(f'Unsubscribed from playlist "{m.mirror_name}" ({playlist_id}).')
-                        else:
-                            remain_mirrors.append(m)
-                    mirrors = remain_mirrors
+        if playlist_id == m.playlist_id:
+            process_listened_playlist(playlist_id, False, False, False, False, confirm)
 
-        if mirror_playlist_id is not None:
-            process_listened_playlist(mirror_playlist_id, False, False, False, False, confirm)
+        if remove_mirrors and m.playlist_id is not None and len(m.subscribed_playlist_ids) == 0:
+            deleted = spotify_api.delete_playlist(m.playlist_id, confirm)
+            if deleted:
+                removed.append(playlist_id)
 
-            if remove_mirrors and not skip_deleting:
-                res = spotify_api.delete_playlist(mirror_playlist_id, confirm)
-                if res:
-                    click.echo(
-                        f'Mirror playlist "{mirror_name}" ({mirror_playlist_id}) removed from library.')
-                removed_playlists.append(mirror_playlist_id)
-
-        if not found:
-            click.echo(f'{playlist_id} not found in user library and mirrors list. Skipped.')
+        unsubscribed.append(playlist_id)
+        click.echo(f'Mirror unsubscribed "{m.name}" ({playlist_id}).')
 
     write_mirrors(mirrors)
 
@@ -310,7 +270,7 @@ def unsubscribe_all(remove_mirrors=True, confirm=False):
 
 def unsubscribe_mirrors_by_name(mirror_names, remove_mirrors, confirm):
     mirrors = read_mirrors()
-    ids = get_mirrors_playlist_ids(mirrors,mirror_names)
+    ids = get_mirrors_playlist_ids(mirrors, mirror_names)
     return unsubscribe(ids, remove_mirrors, confirm)
 
 
@@ -582,7 +542,8 @@ def sort_mirrors():
     for m in mirrors.values():
         for id in m.subscribed_playlist_ids:
             if id in playlist_ids:
-                click.echo(f'Playlist {id} subscribed twice! Unsubscribe this id or fix mirrors.txt file manually.', err=True)
+                click.echo(f'Playlist {id} subscribed twice! Unsubscribe this id or fix mirrors.txt file manually.',
+                           err=True)
             else:
                 playlist_ids.append(id)
 
