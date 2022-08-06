@@ -575,15 +575,16 @@ def delete(playlist_ids, confirm):
 
 def sort_mirrors():
     mirrors = read_mirrors()
-    mirrors = sorted(mirrors, key=lambda x: x.group + x.mirror_name)
+    mirrors = dict(sorted(mirrors.items(), key=lambda item: item[1].group + item[1].name))
     write_mirrors(mirrors)
 
     playlist_ids = []
-    for m in mirrors:
-        if m.playlist_id in playlist_ids:
-            click.echo(f'Playlist {m.playlist_id} subscribed twice!', err=True)
-        else:
-            playlist_ids.append(m.playlist_id)
+    for m in mirrors.values():
+        for id in m.subscribed_playlist_ids:
+            if id in playlist_ids:
+                click.echo(f'Playlist {id} subscribed twice! Unsubscribe this id or fix mirrors.txt file manually.', err=True)
+            else:
+                playlist_ids.append(id)
 
 
 def __calculate_artists_rating(lib: UserLibrary):
