@@ -235,19 +235,19 @@ def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=Fals
     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
 
     if params.filter_names is not None:
-        filterd_csvs = []
+        filtered_csvs = []
         with click.progressbar(length=len(csvs_in_path), label=f'Filtering cached playlists') as bar:
             for i, file_name in enumerate(csvs_in_path):
                 id, name = csv_playlist.get_csv_playlist_id_and_name(file_name)
                 if id is not None and name is not None:
                     if re.search(params.filter_names.upper(), name.upper()):
-                        filterd_csvs.append(file_name)
+                        filtered_csvs.append(file_name)
                 else:
                     click.echo("Invalid cached playlist file name: " + file_name)
                 if i % 1000 == 0:
                     bar.update(1000)
-        click.echo(f'{len(filterd_csvs)}/{len(csvs_in_path)} playlists matches the regex filter')
-        csvs_in_path = filterd_csvs
+        click.echo(f'{len(filtered_csvs)}/{len(csvs_in_path)} playlists matches the regex filter')
+        csvs_in_path = filtered_csvs
         if len(csvs_in_path) == 0:
             exit()
 
@@ -346,7 +346,8 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
             if params.min_not_listened <= 0 or info.tracks_count - info.listened_tracks_count >= params.min_not_listened:
                 if params.min_listened <= 0 or info.listened_tracks_count >= params.min_listened:
                     if params.min_ref_percentage <= 0 or info.ref_percentage >= params.min_ref_percentage:
-                        if params.min_ref_tracks <= 0 or info.ref_tracks_count >= params.min_ref_tracks:
+                        if params.min_ref_tracks <= 0 or info.ref_tracks_count >= params.min_ref_tracks\
+                                or params.ref_tracks is None or len(params.ref_tracks.track_isrcs) == 0:
                             infos.append(info)
 
         if (i + 1) % 100 == 0:
