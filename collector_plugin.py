@@ -64,60 +64,74 @@ def read_mirrors(group_name: str = None) -> List[Mirror]:
     if group_name is not None:
         group_name = group_name.upper()
 
-    if not os.path.isfile(mirrors_file_name):
-        return []
-    with open(mirrors_file_name, 'r', encoding='utf-8-sig') as file:
-        mirrors = []
-        lines = file.readlines()
-        for line in lines:
-            line = line.rstrip("\n").strip()
-            if line == "":
-                continue
+    mirrors: List[Mirror] = []
 
-            m = Mirror()
-            m.playlist_id = line.split(',')[0]
-            m.from_cache = line.split(',')[1] == "+"
-            m.group = line.split(',')[2]
-            m.mirror_name = line.split(',', 3)[3]
+    if os.path.isfile(mirrors_file_name):
+        with open(mirrors_file_name, 'r', encoding='utf-8-sig') as file:
 
-            if group_name is None or group_name == m.group:
-                mirrors.append(m)
+            lines = file.readlines()
+            for line in lines:
+                line = line.rstrip("\n").strip()
+                if line == "":
+                    continue
 
-        return mirrors
+                sub_playlist_id = line.split(',')[0]
+                sub_from_cache = line.split(',')[1] == "+"
+                group = line.split(',')[2]
+                name = line.split(',', 3)[3]
+
+                if group_name is None or group_name == group:
+                    mirror = None
+                    for m in mirrors:
+                        if m.name == name:
+                            mirror = m
+                    if mirror is None:
+                        mirror = Mirror()
+                        mirror.group = group.upper()
+                        mirror.name = name
+                        mirrors.append(mirror)
+                    mirror.subscribed_playlist_ids.append(sub_playlist_id)
+                    mirror.subscribed_playlist_from_cache.append(sub_from_cache)
+
+    return mirrors
 
 
-def get_mirrors_by_groups_dict(mirrors: List[Mirror]):
+def find_mirror_playlists_in_library(mirrors: List[Mirror], user_playlists: List):
+    if user_playlists is None:
+        user_playlists = spotify_api.get_list_of_playlists()
+
+    for playlist in user_playlists:
+        for m in mirrors:
+            if m.name == playlist['name']:
+                m.playlist_id = playlist['id']
+
+
+def mirrors_list_to_dict_by_group(mirrors: List[Mirror]):
     res = {}
     for m in mirrors:
         if m.group not in res:
-            res[m.group] = {}
-        if m.mirror_name not in res[m.group]:
-            res[m.group][m.mirror_name] = []
-        res[m.group][m.mirror_name].append(m)
+            res[m.group] = []
+        res[m.group].append(m)
     return res
 
 
-def get_mirrors_by_ids_dict(mirrors: List[Mirror]):
+def get_sub_playlist_ids(mirrors: List[Mirror], group: str = None):
     res = {}
     for m in mirrors:
-        res[m.playlist_id] = m
+        if group is None or group == m.group:
+            for id in m.subscribed_playlist_ids:
+                res[id] = m
     return res
 
 
 def write_mirrors(mirrors: List[Mirror]):
     with open(mirrors_file_name, 'w', encoding='utf-8-sig') as file:
         for m in mirrors:
-            m.group = m.group.replace(",", " ")
-            m.mirror_name = m.mirror_name.replace(",", " ")
-            file.write(f'{m.playlist_id},{"+" if m.from_cache else "-"},{m.group},{m.mirror_name}\n')
-
-
-def get_subscribed_playlist_dict(mirrors: List[Mirror], group: str = None):
-    all_subs = {}
-    for mirror in mirrors:
-        if group is None or group == mirror.group:
-            all_subs[mirror.playlist_id] = mirror
-    return all_subs
+            for i, playlist_id in enumerate(m.subscribed_playlist_ids):
+                m.group = m.group.replace(",", " ")
+                m.group = m.group.upper()
+                m.name = m.name.replace(",", " ")
+                file.write(f'{playlist_id},{"+" if m.subscribed_playlist_from_cache[i] else "-"},{m.group},{m.name}\n')
 
 
 def get_subs_by_mirror_playlist_id(mirror_playlist_id):
@@ -130,21 +144,6 @@ def get_subs_by_mirror_playlist_id(mirror_playlist_id):
     mirror_name = mirror_playlist["name"]
 
     return get_subs_by_mirror_name(mirror_name)
-
-
-def get_subs_by_mirror_name(mirror_name):
-    mirrors = read_mirrors()
-
-    subs = []
-    for mirror in mirrors:
-        if mirror.mirror_name == mirror_name:
-            subs.append(mirror.playlist_id)
-
-    if len(subs) == 0:
-        click.echo(f'Playlist "{mirror_name}" is not a mirror playlist.')
-        return None
-
-    return subs
 
 
 def read_listened_tracks(cells=None):
@@ -240,7 +239,7 @@ def subscribe(playlist_ids: list, mirror_name=None, group_name="Mirror", from_ca
 
             playlist_name = playlist["name"]
 
-        all_subs = get_subscribed_playlist_dict(mirrors)
+        all_subs = get_sub_playlist_ids(mirrors)
         if playlist_id in all_subs:
             click.echo(f'"{playlist_name}" ({playlist_id}) playlist skipped. Already subscribed.')
             continue
@@ -303,9 +302,27 @@ def get_mirrors_by_name(mirror_name: str, mirrors: list = None):
     return res
 
 
+# id - subscribed playlist id or mirror playlist id
+def find_mirror_by_id(playlist_id: str, mirrors: List[Mirror], user_playlists: List) -> Mirror:
+    # search playlist id mirrors list
+    for m in mirrors:
+        if playlist_id == m.playlist_id:
+            return m
+
+            # search playlist id user library
+    for playlist in user_playlists:
+        if playlist['id'] == playlist_id:
+            mirror_name = playlist['name']
+            for m in mirrors:
+                if m.mirror_name == mirror_name:
+                    return m
+
+    return None
+
+
 def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, user_playlists: list = None):
     mirrors = read_mirrors()
-    mirrors_dict = get_subscribed_playlist_dict(mirrors)
+    mirrors_dict = get_sub_playlist_ids(mirrors)
 
     unsubscribed = []
     removed_playlists = []
@@ -401,7 +418,7 @@ def unsubscribe_mirrors_by_id(mirror_playlist_ids: list, remove_mirrors=False, c
 
 def unsubscribe_all(remove_mirrors=True, confirm=False):
     mirrors = read_mirrors()
-    subs = get_subscribed_playlist_dict(mirrors)
+    subs = get_sub_playlist_ids(mirrors)
     unsubscribed = unsubscribe(subs, remove_mirrors, confirm)
     return unsubscribed
 
@@ -425,149 +442,147 @@ def unsubscribe_mirrors_by_name(mirror_names, remove_mirrors, confirm):
     return all_unsubscribed
 
 
-def list_playlists(fast=True, group_name: str = None):
+def list_playlists(group_name: str = None):
     if group_name is not None:
         group_name = group_name.upper()
 
     mirrors = read_mirrors(group_name)
-    all_playlists = get_subscribed_playlist_dict(mirrors)
-    mirrors_dict = get_mirrors_by_groups_dict(mirrors)
-    mirrors_count = 0
+    user_playlists = spotify_api.get_list_of_playlists()
+    find_mirror_playlists_in_library(mirrors, user_playlists)
+
+    mirrors_dict = mirrors_list_to_dict_by_group(mirrors)
 
     for group_name, mirrors_in_grp in mirrors_dict.items():
         click.echo(f'\n============================= Group "{group_name}" =================================')
-        for mirror_name, mirrors in mirrors_in_grp.items():
-            mirrors_count += 1
-            click.echo(f'\n"{mirror_name}":')
-            for m in mirrors:
-                if fast:
-                    click.echo(f'  {m.playlist_id}')
-                else:
-                    playlist = spotify_api.get_playlist(m.playlist_id)
-                    if playlist is None:
-                        click.echo(f'  Playlist "{m.playlist_id}" not found.')
-                        continue
-                    click.echo(f'  {m.playlist_id} "{playlist["name"]}"')
+        for mirror in mirrors_in_grp:
+            click.echo(f'Mirror: {mirror.name}')
+            if mirror.playlist_id is not None:
+                click.echo(f'Playlist: {mirror.playlist_id}')
+            else:
+                click.echo(f'Playlist: NOT CREATED')
+            click.echo(f'Subscribed playlists:')
+            for i, pl in enumerate(mirror.subscribed_playlist_ids):
+                click.echo(f'   {pl}')
+            click.echo(f'-------------------------------------------')
+
     click.echo(f'----------------------------------------------------------------------------')
-    click.echo(f'Total {len(all_playlists)} subscribed playlists in {mirrors_count} mirrors.')
+    all_playlists = get_sub_playlist_ids(mirrors)
+    click.echo(f'Total {len(all_playlists)} subscribed playlists in {len(mirrors)} mirrors.')
 
 
-def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group_name=None):
-    if group_name is not None:
-        group_name = group_name.upper()
-
+def update(remove_empty_mirrors=False, confirm=False, playlist_ids=None, group_name=None, update_cached_playlists=True):
     mirrors = read_mirrors(group_name)
     if len(mirrors) == 0:
         click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
         exit()
+    mirrors_by_ids = get_sub_playlist_ids(mirrors)
+    mirrors_by_group = mirrors_list_to_dict_by_group(mirrors)
 
-    subs = get_subscribed_playlist_dict(mirrors)
-
-    if mirror_ids is not None:
-        for i in range(len(mirror_ids)):
-            mirror_ids[i] = spotify_api.parse_playlist_id(mirror_ids[i])
+    mirrors_to_update = {}
 
     user_playlists = spotify_api.get_list_of_playlists()
+
+    if group_name is not None:
+        group_name = group_name.upper()
+        if group_name in mirrors_by_group:
+            for m in mirrors_by_group[group_name]:
+                mirrors_to_update[m.playlist_id] = m
+        else:
+            click.echo(f'Cant update mirrors group "{group_name}". Group not found in mirros list.')
+
+    if playlist_ids is not None:
+        for id in playlist_ids:
+            id = spotify_api.parse_playlist_id(id)
+            m = find_mirror_by_id(id, mirrors, user_playlists)
+            if m:
+                mirrors_to_update[m.playlist_id] = m
+            else:
+                click.echo(f'Cant update mirror playlist id "{id}". Playlist not found in mirrors list.')
+
+    if group_name is not None and playlist_ids is not None:
+        mirrors_to_update = mirrors_by_ids
 
     all_listened = []
     all_duplicates = []
     all_liked = []
-    all_sub_tracks = []
+    all_tracks = []
     all_liked_added_to_listened = []
     all_added_to_mirrors = []
 
     summery = []
 
-    mirrors_dict = get_mirrors_by_groups_dict(mirrors)
+    cached_playlists = None
 
-    cached_playlists = cache.get_cached_playlists_dict()
+    requests_playlists = {}
 
-    with click.progressbar(length=len(subs) + 1,
-                           label=f'Updating {len(subs)} subscribed playlists') as bar:
-        for group_name, mirrors_in_grp in mirrors_dict.items():
-            for mirror_name, mirrors in mirrors_in_grp.items():
-                # get mirror playlist
-                mirror_playlist_id = None
-                for playlist in user_playlists:
-                    if playlist['name'] == mirror_name:
-                        mirror_playlist_id = playlist['id']
+    with click.progressbar(mirrors_to_update, label=f'Updating {len(mirrors_to_update)} mirror playlists') as bar:
+        for m in bar:
+            # get all tracks from subscribed playlists
+            mirror_tracks = []
 
-                if mirror_playlist_id is not None and mirror_ids is not None and len(mirror_ids) > 0:
-                    if mirror_playlist_id not in mirror_ids:
+            # read playlist from cache
+            if m.from_cache:
+                if update_cached_playlists:
+                    if cached_playlists is None:
+                        cached_playlists = cache.get_cached_playlists_dict()
+                    if m.playlist_id not in cached_playlists:
+                        click.echo(
+                            f"\nCant update mirror playlist {m.playlist_id}. CSV file not found in cache directory.")
                         continue
+                    csv_file_name = cached_playlists[m.playlist_id][1]
+                    playlist = cache.read_cached_playlist(csv_file_name)
+                    mirror_tracks.extend(playlist['tracks'])
+                    all_tracks.extend(playlist['tracks'])
+            # read playlist from spotify
+            else:
+                # prevent request twice
+                if m.playlist_id not in requests_playlists:
+                    requests_playlists[m.playlist_id] = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
+                playlist = requests_playlists[m.playlist_id]
+                if playlist is None:
+                    click.echo(
+                        f"\nCant update mirror playlist {m.playlist_id}. Playlist not found in spotify.")
+                    continue
+                tracks = playlist["tracks"]["items"]
+                tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+                mirror_tracks.extend(tags_list)
+                all_tracks.extend(tags_list)
 
-                # get all tracks from subscribed playlists
-                new_tracks = []
-                for m in mirrors:
-                    if m.from_cache:
-                        if m.playlist_id in cached_playlists:
-                            csv_file_name = cached_playlists[m.playlist_id][1]
-                            sub_playlist = cache.read_cached_playlist(csv_file_name)
-                            new_tracks.extend(sub_playlist['tracks'])
-                            all_sub_tracks.extend(sub_playlist['tracks'])
-                        else:
-                            click.echo(
-                                f"\nCant update mirror playlist {m.playlist_id}. CSV file not found in cache directory.")
-                    else:
-                        sub_playlist = spotify_api.get_playlist_with_full_list_of_tracks(m.playlist_id)
-                        if sub_playlist is not None:
-                            sub_tracks = sub_playlist["tracks"]["items"]
-                            sub_tags_list = spotify_api.read_tags_from_spotify_tracks(sub_tracks)
-                            new_tracks.extend(sub_tags_list)
-                            all_sub_tracks.extend(sub_tags_list)
-                    bar.update(1)
+            # mirror_playlist_id =
 
-                # remove duplicates
-                new_tracks, duplicates = utils.remove_duplicated_tags(new_tracks, ['SPOTIFY_TRACK_ID'])
-                all_duplicates.extend(duplicates)
+            # remove liked tracks from mirror, remove empty mirror
+            mirror_tags_list, removed_liked, removed_listened, removed_duplicates = \
+                process_listened_playlist(mirror_playlist_id, remove_empty_mirrors, True, True, True, confirm)
 
-                # remove already listened tracks
-                new_tracks, listened_tracks = get_not_listened_tracks(new_tracks)
-                all_listened.extend(listened_tracks)
+            all_listened.extend(removed_listened)
+            all_duplicates.extend(removed_duplicates)
+            all_liked.extend(removed_liked)
 
-                # remove liked tracks
-                liked, not_liked = spotify_api.get_liked_tags_list(new_tracks)
-                all_liked.extend(liked)
-                new_tracks = not_liked
+            # remove tracks already exist in mirror
+            mirror_tracks, already_exist = utils.remove_exist_tags(mirror_tags_list, mirror_tracks,
+                                                                   ['SPOTIFY_TRACK_ID'])
 
-                mirror_tags_list = []
-                if mirror_playlist_id is not None:
-                    if mirror_playlist_id is not None:
-                        # remove liked tracks from mirror, remove empty mirror
-                        remove_mirror = remove_empty_mirrors
-                        if len(new_tracks) > 0:
-                            remove_mirror = False
-                        mirror_tags_list, removed_liked, removed_listened, removed_duplicates = \
-                            process_listened_playlist(mirror_playlist_id, remove_mirror, True, True, True, confirm)
-                        all_liked_added_to_listened.extend(removed_liked)
+            if len(mirror_tracks) > 0:
+                # create new mirror playlist
+                if mirror_playlist_id is None:
+                    mirror_playlist_id = spotify_api.create_playlist(mirror_name)
+                    summery.append(f'Mirror playlist "{mirror_name}" ({mirror_playlist_id}) created.')
 
-                    # remove tracks already exist in mirror
-                    new_tracks, already_exist = utils.remove_exist_tags(mirror_tags_list, new_tracks,
-                                                                        ['SPOTIFY_TRACK_ID'])
-
-                if len(new_tracks) > 0:
-                    # create new mirror playlist
-                    if mirror_playlist_id is None:
-                        mirror_playlist_id = spotify_api.create_playlist(mirror_name)
-                        summery.append(f'Mirror playlist "{mirror_name}" ({mirror_playlist_id}) created.')
-
-                    # add new tracks to mirror
-                    new_tracks_ids = spotify_api.get_track_ids_from_tags_list(new_tracks)
-                    tracks_added, import_duplicates, already_exist, invalid_ids = \
-                        spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
-                    all_added_to_mirrors.extend(tracks_added)
-                    if len(tracks_added) > 0:
-                        summery.append(
-                            f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
-
-        bar.finish()
+                # add new tracks to mirror
+                new_tracks_ids = spotify_api.get_track_ids_from_tags_list(mirror_tracks)
+                tracks_added, import_duplicates, already_exist, invalid_ids = \
+                    spotify_api.add_tracks_to_playlist_by_ids(mirror_playlist_id, new_tracks_ids, True)
+                all_added_to_mirrors.extend(tracks_added)
+                if len(tracks_added) > 0:
+                    summery.append(
+                        f'{len(tracks_added)} new tracks added from subscribed playlists to mirror "{mirror_name}"')
 
     click.echo()
     for line in summery:
         click.echo(line)
 
     click.echo("------------------------------------------")
-    click.echo(f'{len(all_sub_tracks)} tracks total in {len(subs)} subscribed playlists.')
+    click.echo(f'{len(all_tracks)} tracks total in {len(mirrors_by_ids)} subscribed playlists.')
     if len(all_listened) > 0:
         click.echo(f'{len(all_listened)} tracks already listened (not added to mirrors).')
     if len(all_liked) > 0:
@@ -715,7 +730,7 @@ def get_user_library(group_name: str = None, filter_names=None, add_fav_to_liste
     lib = UserLibrary()
 
     lib.mirrors = read_mirrors(group_name)
-    lib.subscribed_playlist_ids = get_subscribed_playlist_dict(lib.mirrors)
+    lib.subscribed_playlist_ids = get_sub_playlist_ids(lib.mirrors)
 
     listened_tracks = read_listened_tracks()
     lib.listened_tracks.add_tracks(listened_tracks)

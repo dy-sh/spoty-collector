@@ -127,10 +127,18 @@ class PlaylistInfo:
 
 
 class Mirror:
+    subscribed_playlist_ids: List[str]
+    subscribed_playlist_from_cache: List[bool]
     playlist_id: str
-    from_cache: bool
     group: str
-    mirror_name: str
+    name: str
+
+    def __init__(self):
+        self.subscribed_playlist_ids = []
+        self.subscribed_playlist_from_cache = []
+        self.playlist_id = None
+        self.group = None
+        self.name = None
 
 
 class FindBestTracksParams:

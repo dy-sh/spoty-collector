@@ -58,7 +58,7 @@ If the name of the mirror is not specified, then the name of each playlist that 
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, group_name)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscribed_playlist_dict(mirrors)
+    all_subs = col.get_sub_playlist_ids(mirrors)
     click.echo('--------------------------------------')
     click.echo(f'{len(new_subs)} new playlists added to subscriptions (total subscriptions: {len(all_subs)}).')
     if not do_not_update and len(new_mirrors) > 0:
@@ -82,7 +82,7 @@ PLAYLIST_IDS - IDs or URIs of subscribed playlists or mirror playlists
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscribed_playlist_dict(mirrors)
+    all_subs = col.get_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -98,7 +98,7 @@ Unsubscribe from all specified playlists.
     """
     unsubscribed = col.unsubscribe_all(not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscribed_playlist_dict(mirrors)
+    all_subs = col.get_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -114,10 +114,10 @@ Unsubscribe from all playlists in specified group.
     """
     group_name = group_name.upper()
     mirrors = col.read_mirrors(group_name)
-    playlist_ids = col.get_subscribed_playlist_dict(mirrors)
+    playlist_ids = col.get_sub_playlist_ids(mirrors)
     unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscribed_playlist_dict(mirrors)
+    all_subs = col.get_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -137,20 +137,18 @@ MIRROR_NAMES - names of mirror playlists.
     mirror_names = spoty.utils.tuple_to_list(mirror_names)
     unsubscribed = col.unsubscribe_mirrors_by_name(mirror_names, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_subscribed_playlist_dict(mirrors)
+    all_subs = col.get_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
 @collector.command("list")
 @click.option('--mirror-group', '--g',
               help='Mirror group name (all if not specified).')
-@click.option('--fast', '-f', is_flag=True,
-              help='Do not request playlist names (fast).')
-def list_mirrors(fast, mirror_group):
+def list_mirrors(mirror_group):
     """
 Display a list of mirrors and subscribed playlists.
     """
-    col.list_playlists(fast, mirror_group)
+    col.list_playlists(mirror_group)
 
 
 @collector.command("update")
