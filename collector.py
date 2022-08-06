@@ -39,10 +39,12 @@ Prints configuration parameters.
               help='A mirror playlist with the specified name will be added to the library. You can subscribe to multiple playlists by merging them into one mirror. If not specified, the playlist name will be used as mirror name.')
 @click.option('--group-name', '--g', default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
               help='Mirror group name.')
-@click.option('--do-not-update', '-u', is_flag=True,
+@click.option('--do-not-update', '-U', is_flag=True,
               help='Do not update mirror after subscription. Use "update" command to do it later.')
+@click.option('--from-cache', '-c', is_flag=True,
+              help='Read playlist from cache.')
 @click.argument("playlist_ids", nargs=-1)
-def subscribe(playlist_ids, group_name, mirror_name, do_not_update):
+def subscribe(playlist_ids, group_name, mirror_name, do_not_update, from_cache):
     """
 Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
@@ -56,9 +58,9 @@ If NONE is specified as the group name, then the name pattern will not be used. 
 If the name of the mirror is not specified, then the name of each playlist that we subscribe to will be used as the name. If a name is specified, then all listed playlists will use the same mirror name and as a result, they will be merged into one playlist.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, group_name)
+    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, group_name, from_cache, False)
     mirrors = col.read_mirrors()
-    all_subs = col.get_sub_playlist_ids(mirrors)
+    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     click.echo('--------------------------------------')
     click.echo(f'{len(new_subs)} new playlists added to subscriptions (total subscriptions: {len(all_subs)}).')
     if not do_not_update and len(new_mirrors) > 0:
@@ -82,9 +84,8 @@ PLAYLIST_IDS - IDs or URIs of subscribed playlists or mirror playlists
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
     unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_sub_playlist_ids(mirrors)
+    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
-
 
 
 @collector.command("unsub-all")
@@ -98,7 +99,7 @@ Unsubscribe from all specified playlists.
     """
     unsubscribed = col.unsubscribe_all(not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_sub_playlist_ids(mirrors)
+    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -114,13 +115,11 @@ Unsubscribe from all playlists in specified group.
     """
     group_name = group_name.upper()
     mirrors = col.read_mirrors(group_name)
-    playlist_ids = col.get_sub_playlist_ids(mirrors)
+    playlist_ids = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_sub_playlist_ids(mirrors)
+    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
-
-
 
 
 @collector.command("unsub-name")
@@ -137,7 +136,7 @@ MIRROR_NAMES - names of mirror playlists.
     mirror_names = spoty.utils.tuple_to_list(mirror_names)
     unsubscribed = col.unsubscribe_mirrors_by_name(mirror_names, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
-    all_subs = col.get_sub_playlist_ids(mirrors)
+    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
 
 
@@ -200,7 +199,8 @@ All specified playlists will be processed as listened and deleted.
               help='Do not remove empty playlists.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask any questions.')
-def clean_playlists(playlist_ids, no_remove_if_empty, no_remove_liked, no_remove_listened, no_remove_duplicates, confirm):
+def clean_playlists(playlist_ids, no_remove_if_empty, no_remove_liked, no_remove_listened, no_remove_duplicates,
+                    confirm):
     """
 \b
 Clean specified playlists.
@@ -214,7 +214,8 @@ You can skip any of this step by options.
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
 
     all_tags_list, all_removed_liked, all_removed_listened, all_removed_duplicates = \
-        col.process_listened_playlists(playlist_ids, not no_remove_if_empty, not no_remove_liked, not no_remove_listened, not no_remove_duplicates, confirm)
+        col.process_listened_playlists(playlist_ids, not no_remove_if_empty, not no_remove_liked,
+                                       not no_remove_listened, not no_remove_duplicates, confirm)
     click.echo('--------------------------------------')
     click.echo(f'{len(all_tags_list)} tracks total in specified playlists.')
     if len(all_removed_liked) > 0:
@@ -243,7 +244,8 @@ You can skip any of this step by options.
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask any questions.')
 @click.pass_context
-def clean_playlists_by_regex(ctx, filter_names, no_remove_if_empty, no_remove_liked, no_remove_listened, no_remove_duplicates, confirm):
+def clean_playlists_by_regex(ctx, filter_names, no_remove_if_empty, no_remove_liked, no_remove_listened,
+                             no_remove_duplicates, confirm):
     """
 This command works the same way as "clean" command, but accepts a regex which applies to playlist names instead of playlist IDs.
 
@@ -466,7 +468,7 @@ Provide playlist IDs or  URIs as argument.
               help='Do not ask for any confirmations.')
 def find_best_in_cache(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
                        sorting, reverse_sorting, listened_accuracy, fav_weight, ref_weight, prob_weight,
-                       subscribe_count, subscribe_group, ref, ref_id,confirm):
+                       subscribe_count, subscribe_group, ref, ref_id, confirm):
     """
 Searches through cached playlists and finds the best ones.
 
@@ -508,8 +510,9 @@ To speed up the library search, you can temporarily cache your library using the
     print_playlist_infos(infos, limit)
 
     if subscribe_count > 0 and len(infos) > 0:
-        if not confirm and not click.confirm(f'Are you sure you want to add top {subscribe_count} playlists to the library?',
-                             abort=True):
+        if not confirm and not click.confirm(
+                f'Are you sure you want to add top {subscribe_count} playlists to the library?',
+                abort=True):
             click.echo("\nAborted")
             exit()
         click.echo("\n")

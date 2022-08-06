@@ -42,7 +42,7 @@ if not os.path.isdir(library_cache_dir):
 
 
 # [id][0 = playlist_name, 1 - file_name]
-def get_cached_playlists_dict(use_library_dir=False):
+def get_cached_playlists_dict(use_library_dir=False) -> dict[str, [str, str]]:
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
     click.echo("Reading cache playlists directory")
@@ -346,7 +346,7 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
             if params.min_not_listened <= 0 or info.tracks_count - info.listened_tracks_count >= params.min_not_listened:
                 if params.min_listened <= 0 or info.listened_tracks_count >= params.min_listened:
                     if params.min_ref_percentage <= 0 or info.ref_percentage >= params.min_ref_percentage:
-                        if params.min_ref_tracks <= 0 or info.ref_tracks_count >= params.min_ref_tracks\
+                        if params.min_ref_tracks <= 0 or info.ref_tracks_count >= params.min_ref_tracks \
                                 or params.ref_tracks is None or len(params.ref_tracks.track_isrcs) == 0:
                             infos.append(info)
 
@@ -363,7 +363,7 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
     added_playlists = 0
     small_tracks = 0
     small_added = False
-    sub_ids=[]
+    sub_ids = []
     for info in infos:
         if added_playlists >= count:
             break
@@ -383,7 +383,7 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
             sub_ids.append(info.playlist_id)
             added_playlists += 1
 
-    if added_playlists>0:
+    if added_playlists > 0:
         col.update(sub_ids)
 
 
