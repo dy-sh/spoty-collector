@@ -69,7 +69,7 @@ If the name of the mirror is not specified, then the name of each playlist that 
 
 @collector.command("unsub")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--do-not-remove', '-r', is_flag=True,
+@click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists and tracks.')
@@ -88,7 +88,7 @@ PLAYLIST_IDS - IDs or URIs of subscribed playlists or mirror playlists
 
 
 @collector.command("unsub-all")
-@click.option('--do-not-remove', '-r', is_flag=True,
+@click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists.')
@@ -104,7 +104,7 @@ Unsubscribe from all specified playlists.
 
 @collector.command("unsub-group")
 @click.argument("group_name")
-@click.option('--do-not-remove', '-r', is_flag=True,
+@click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists.')
@@ -123,19 +123,19 @@ Unsubscribe from all playlists in specified group.
 
 
 
-@collector.command("unsub-mirror-name")
+@collector.command("unsub-name")
 @click.argument("mirror_names", nargs=-1)
-@click.option('--remove-mirror', '-r', is_flag=True,
-              help='Remove mirror playlists from the library.')
+@click.option('--do-not-remove', '-R', is_flag=True,
+              help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists.')
-def unsubscribe_mirror_name(mirror_names, remove_mirror, confirm):
+def unsubscribe_name(mirror_names, do_not_remove, confirm):
     """
 Unsubscribe from playlists for which the specified mirror has been created.
 MIRROR_NAMES - names of mirror playlists.
     """
     mirror_names = spoty.utils.tuple_to_list(mirror_names)
-    unsubscribed = col.unsubscribe_mirrors_by_name(mirror_names, remove_mirror, confirm)
+    unsubscribed = col.unsubscribe_mirrors_by_name(mirror_names, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscribed_playlist_dict(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
@@ -192,20 +192,17 @@ All specified playlists will be processed as listened and deleted.
 
 @collector.command("clean")
 @click.argument("playlist_ids", nargs=-1)
-@click.option('--no-listened-tracks', '-L', is_flag=True,
-              help='Do not remove listened tracks.')
-@click.option('--no-duplicated-tracks', '-D', is_flag=True,
+@click.option('--no-remove-duplicates', '-D', is_flag=True,
               help='Do not remove duplicated tracks.')
-@click.option('--no-liked-tracks', '-S', is_flag=True,
-              help='Do not remove liked tracks (and do not add them to the listened list).')
-@click.option('--no-empty-playlists', '-P', is_flag=True,
+@click.option('--no-remove-liked', '-K', is_flag=True,
+              help='Do not remove liked tracks.')
+@click.option('--no-remove-listened', '-L', is_flag=True,
+              help='Do not remove liked tracks.')
+@click.option('--no-remove-if-empty', '-R', is_flag=True,
               help='Do not remove empty playlists.')
-@click.option('--like', '-s', is_flag=True,
-              help='Like all listened tracks in playlist.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask any questions.')
-def clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks, no_listened_tracks, like,
-                    confirm):
+def clean_playlists(playlist_ids, no_remove_if_empty, no_remove_liked, no_remove_listened, no_remove_duplicates, confirm):
     """
 \b
 Clean specified playlists.
@@ -218,63 +215,50 @@ You can skip any of this step by options.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
 
-    all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists, \
-    all_added_to_listened = col.clean_playlists(playlist_ids, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
-                                                no_listened_tracks, like, confirm)
+    all_tags_list, all_removed_liked, all_removed_listened, all_removed_duplicates = \
+        col.process_listened_playlists(playlist_ids, not no_remove_if_empty, not no_remove_liked, not no_remove_listened, not no_remove_duplicates, confirm)
     click.echo('--------------------------------------')
     click.echo(f'{len(all_tags_list)} tracks total in specified playlists.')
-    if len(all_liked_tracks_removed) > 0:
-        click.echo(f'{len(all_liked_tracks_removed)} liked tracks removed.')
-    if len(all_duplicates_removed) > 0:
-        click.echo(f'{len(all_duplicates_removed)} duplicated tracks removed.')
-    if len(all_listened_removed) > 0:
-        click.echo(f'{len(all_listened_removed)} listened tracks removed.')
-    if len(all_added_to_listened) > 0:
-        click.echo(f'{len(all_added_to_listened)} liked tracks added to listened.')
-    if len(all_deleted_playlists) > 0:
-        click.echo(f'{len(all_deleted_playlists)} empty playlists deleted.')
+    if len(all_removed_liked) > 0:
+        click.echo(f'{len(all_removed_liked)} liked tracks removed.')
+    if len(all_removed_duplicates) > 0:
+        click.echo(f'{len(all_removed_duplicates)} duplicated tracks removed.')
+    if len(all_removed_listened) > 0:
+        click.echo(f'{len(all_removed_listened)} listened tracks removed.')
 
-    if len(all_liked_tracks_removed) == 0 \
-            and len(all_duplicates_removed) == 0 \
-            and len(all_listened_removed) == 0 \
-            and len(all_added_to_listened) == 0 \
-            and len(all_deleted_playlists) == 0:
+    if len(all_removed_liked) == 0 \
+            and len(all_removed_duplicates) == 0 \
+            and len(all_removed_listened) == 0:
         click.echo(f'The playlists are fine. No changes applied.')
 
 
 @collector.command("clean-filtered")
 @click.argument("filter-names")
-@click.option('--no-empty-playlists', '-P', is_flag=True,
-              help='Do not remove empty playlists.')
-@click.option('--no-liked-tracks', '-S', is_flag=True,
-              help='Do not remove liked tracks.')
-@click.option('--no-duplicated-tracks', '-D', is_flag=True,
+@click.option('--no-remove-duplicates', '-D', is_flag=True,
               help='Do not remove duplicated tracks.')
-@click.option('--no-listened-tracks', '-L', is_flag=True,
-              help='Do not remove listened tracks.')
-@click.option('--like', '-s', is_flag=True,
-              help='Like all listened tracks in playlist.')
-# @click.option('--find-copies', '-c', is_flag=True,
-#               help='For each listened track, find all copies of it (in different albums and compilations) and mark all copies as listened to. ISRC tag used to find copies.')
+@click.option('--no-remove-liked', '-K', is_flag=True,
+              help='Do not remove liked tracks.')
+@click.option('--no-remove-listened', '-L', is_flag=True,
+              help='Do not remove liked tracks.')
+@click.option('--no-remove-if-empty', '-R', is_flag=True,
+              help='Do not remove empty playlists.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask any questions.')
 @click.pass_context
-def clean_playlists_by_regex(ctx, filter_names, no_empty_playlists, no_liked_tracks, no_duplicated_tracks,
-                             no_listened_tracks, like,
-                             confirm):
+def clean_playlists_by_regex(ctx, filter_names, no_remove_if_empty, no_remove_liked, no_remove_listened, no_remove_duplicates, confirm):
     """
 This command works the same way as "clean" command, but accepts a regex which applies to playlist names instead of playlist IDs.
 
 \b
 Examples:
     Clean all playlists, whose names start with "BEST":
-    spoty plug collector clean-reg "^BEST"
+    spoty plug collector clean-filtered "^BEST"
 
     Clean all playlists, whose names contain "rock":
-    spoty plug collector clean-reg "rock"
+    spoty plug collector clean-filtered "rock"
 
     Clean all playlists, whose names contain "rock", "Rock", "ROCK" (ignore case sensitivity):
-    spoty plug collector clean-reg "(?i)rock"
+    spoty plug collector clean-filtered "(?i)rock"
     """
 
     playlists = spotify_api.get_list_of_playlists()
@@ -283,7 +267,7 @@ Examples:
         exit()
 
     if filter_names is not None:
-        playlists = list(filter(lambda pl: re.findall(filter_names, pl['name']), playlists))
+        playlists = list(filter(lambda pl: re.findall(re.escape(filter_names), pl['name']), playlists))
         click.echo(f'{len(playlists)} playlists matches the filter')
 
     if len(playlists) == 0:
@@ -300,10 +284,9 @@ Examples:
     for playlist in playlists:
         playlist_ids.append(playlist['id'])
 
-    ctx.invoke(clean_playlists, playlist_ids=playlist_ids, no_empty_playlists=no_empty_playlists,
-               no_liked_tracks=no_liked_tracks,
-               no_duplicated_tracks=no_duplicated_tracks,
-               no_listened_tracks=no_listened_tracks, like=like, confirm=confirm)
+    ctx.invoke(clean_playlists, playlist_ids=playlist_ids, no_remove_if_empty=no_remove_if_empty,
+               no_remove_liked=no_remove_liked, no_remove_listened=no_remove_listened,
+               no_remove_duplicates=no_remove_duplicates, confirm=confirm)
 
 
 @collector.command("optimize-listened-list")

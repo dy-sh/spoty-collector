@@ -359,7 +359,7 @@ def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, use
                     mirrors = remain_mirrors
 
         if mirror_playlist_id is not None:
-            process_listened_playlist(mirror_playlist_id, False, False, confirm)
+            process_listened_playlist(mirror_playlist_id, False, False, False, False, confirm)
 
             if remove_mirrors and not skip_deleting:
                 res = spotify_api.delete_playlist(mirror_playlist_id, confirm)
@@ -537,9 +537,9 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group_nam
                         remove_mirror = remove_empty_mirrors
                         if len(new_tracks) > 0:
                             remove_mirror = False
-                        mirror_tags_list, removed, liked = process_listened_playlist(mirror_playlist_id, remove_mirror,
-                                                                                     True, confirm)
-                        all_liked_added_to_listened.extend(removed)
+                        mirror_tags_list, removed_liked, removed_listened, removed_duplicates = \
+                            process_listened_playlist(mirror_playlist_id, remove_mirror, True, True, True, confirm)
+                        all_liked_added_to_listened.extend(removed_liked)
 
                     # remove tracks already exist in mirror
                     new_tracks, already_exist = utils.remove_exist_tags(mirror_tags_list, new_tracks,
@@ -580,29 +580,55 @@ def update(remove_empty_mirrors=False, confirm=False, mirror_ids=None, group_nam
     click.echo(f'{len(mirrors)} subscribed playlists updated.')
 
 
-def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked_tracks=True, confirm=False):
-    # get tracks from mirror
+def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked=True, remove_listened=True,
+                              remove_duplicates=True, confirm=False):
+    # get tracks
     playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id)
     if playlist is None:
-        return [], []
+        return [], [], []
     playlist_name = playlist['name']
     tracks = playlist["tracks"]["items"]
     tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
 
-    # remove liked tracks from playlist
+    # add tracks to listened
     liked_tags_list, not_liked_tags_list = spotify_api.get_liked_tags_list(tags_list)
     add_tracks_to_listened(liked_tags_list)
 
-    removed = []
-    if remove_liked_tracks:
-        liked_ids = spotify_api.get_track_ids_from_tags_list(liked_tags_list)
-        spotify_api.remove_tracks_from_playlist(playlist_id, liked_ids)
-        tags_list, removed = utils.remove_exist_tags(liked_tags_list, tags_list, ['SPOTIFY_TRACK_ID'])
-        if len(removed) > 0:
-            click.echo(f'\n{len(removed)} liked tracks added to listened and removed from playlist "{playlist_name}"')
+    # remove liked tracks from playlist
+    removed_liked = []
+    if remove_liked:
+        if len(tags_list) > 0:
+            liked_ids = spotify_api.get_track_ids_from_tags_list(liked_tags_list)
+            spotify_api.remove_tracks_from_playlist(playlist_id, liked_ids)
+            tags_list, removed_liked = utils.remove_exist_tags(liked_tags_list, tags_list, ['SPOTIFY_TRACK_ID'])
+            if len(removed_liked) > 0:
+                click.echo(
+                    f'\n{len(removed_liked)} liked tracks added to listened and removed from playlist "{playlist_name}"')
     else:
         if len(liked_tags_list) > 0:
-            click.echo(f'\n{len(removed)} liked tracks added to listened from playlist "{playlist_name}"')
+            click.echo(f'\n{len(removed_liked)} liked tracks added to listened from playlist "{playlist_name}"')
+
+    # remove listened tracks
+    removed_listened = []
+    if remove_listened:
+        if len(tags_list) > 0:
+            not_listened, listened = get_not_listened_tracks(tags_list, False)
+            ids = spotify_api.get_track_ids_from_tags_list(listened)
+            if len(ids) > 0:
+                spotify_api.remove_tracks_from_playlist(playlist_id, ids)
+                removed_listened.extend(listened)
+                tags_list = not_listened
+
+    # remove duplicates
+    removed_duplicates = []
+    if remove_duplicates:
+        if len(tags_list) > 0:
+            not_duplicated, duplicates = utils.remove_duplicated_tags(tags_list, ['SPOTIFY_TRACK_ID'], False, False)
+            ids = spotify_api.get_track_ids_from_tags_list(duplicates)
+            if len(ids) > 0:
+                spotify_api.remove_tracks_from_playlist(playlist_id, ids)
+                removed_duplicates.extend(duplicates)
+                tags_list = not_duplicated
 
     # remove empty
     if remove_if_empty:
@@ -612,85 +638,30 @@ def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked_tr
                 click.echo(
                     f'\nMirror playlist "{playlist_name}" ({playlist_id}) is empty and has been removed from library.')
 
-    return tags_list, removed, liked_tags_list
+    return tags_list, removed_liked, removed_listened, removed_duplicates
 
 
-def clean_playlists(playlist_ids, no_empty_playlists=False, no_liked_tracks=False, no_duplicated_tracks=False,
-                    no_listened_tracks=False, like_listened_tracks=False, confirm=False):
+def process_listened_playlists(playlist_ids, remove_if_empty=True, remove_liked=True, remove_listened=True,
+                               remove_duplicates=True, confirm=False):
     all_tags_list = []
-    all_liked_tracks_removed = []
-    all_deleted_playlists = []
-    all_duplicates_removed = []
-    all_listened_removed = []
-    all_added_to_listened = []
+    all_removed_liked = []
+    all_removed_listened = []
+    all_removed_duplicates = []
 
     bar_showed = len(playlist_ids) > 1
     if bar_showed:
-        bar = click.progressbar(length=len(playlist_ids), label=f'Cleaning {len(playlist_ids)} playlists')
+        bar = click.progressbar(length=len(playlist_ids), label=f'Processing {len(playlist_ids)} playlists')
 
     for playlist_id in playlist_ids:
         playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
-        playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id, True, not bar_showed)
-        if playlist is None:
-            click.echo(f'  Playlist "{playlist_id}" not found.')
-            continue
-
-        tracks = playlist["tracks"]["items"]
-        tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+        tags_list, removed_liked, removed_listened, removed_duplicates = \
+            process_listened_playlist(playlist_id, remove_if_empty, remove_liked, remove_listened, remove_duplicates,
+                                      confirm)
         all_tags_list.extend(tags_list)
-
-        # remove listened tracks
-        if not no_listened_tracks:
-            not_listened, listened = get_not_listened_tracks(tags_list, not bar_showed)
-            ids = spotify_api.get_track_ids_from_tags_list(listened)
-            if len(ids) > 0:
-                if confirm or click.confirm(
-                        f'\nDo you want to remove {len(ids)} listened tracks from playlist "{playlist["name"]}" ({playlist_id})?'):
-                    spotify_api.remove_tracks_from_playlist(playlist_id, ids)
-                    all_listened_removed.extend(listened)
-                    tags_list = not_listened
-
-        # like listened tracks
-        if like_listened_tracks:
-            not_listened, listened = get_not_listened_tracks(tags_list)
-            ids = spotify_api.get_track_ids_from_tags_list(listened)
-            if len(ids) > 0:
-                not_liked_track_ids = spotify_api.get_not_liked_track_ids(ids)
-                all_liked_tracks_removed.extend(not_liked_track_ids)
-                spotify_api.add_tracks_to_liked(not_liked_track_ids)
-
-        # remove duplicates
-        if not no_duplicated_tracks:
-            not_duplicated, duplicates = utils.remove_duplicated_tags(tags_list, ['SPOTIFY_TRACK_ID'], False,
-                                                                      not bar_showed)
-            ids = spotify_api.get_track_ids_from_tags_list(duplicates)
-            if len(ids) > 0:
-                if confirm or click.confirm(
-                        f'\nDo you want to remove {len(ids)} duplicates from playlist "{playlist["name"]}" ({playlist_id})?'):
-                    spotify_api.remove_tracks_from_playlist(playlist_id, ids)
-                    all_duplicates_removed.extend(duplicates)
-                    tags_list = not_duplicated
-
-        # add liked tracks to listened and remove them
-        if not no_liked_tracks:
-            liked, not_liked = spotify_api.get_liked_tags_list(tags_list, not bar_showed)
-            ids = spotify_api.get_track_ids_from_tags_list(liked)
-            if len(ids) > 0:
-                added_to_listened, already_listened = add_tracks_to_listened(liked)
-                all_added_to_listened.extend(added_to_listened)
-                if confirm or click.confirm(
-                        f'\nDo you want to remove {len(ids)} liked tracks from playlist "{playlist["name"]}" ({playlist_id})?'):
-                    spotify_api.remove_tracks_from_playlist(playlist_id, ids)
-                    all_liked_tracks_removed.extend(liked)
-                    tags_list = not_liked
-
-        # remove playlist if empty
-        if not no_empty_playlists:
-            if len(tags_list) == 0:
-                res = spotify_api.delete_playlist(playlist_id, confirm)
-                if res:
-                    all_deleted_playlists.append(playlist_id)
+        all_removed_liked.extend(removed_liked)
+        all_removed_listened.extend(removed_listened)
+        all_removed_duplicates.extend(removed_duplicates)
 
         if bar_showed:
             bar.update(1)
@@ -698,14 +669,14 @@ def clean_playlists(playlist_ids, no_empty_playlists=False, no_liked_tracks=Fals
     if bar_showed:
         click.echo()  # new line
 
-    return all_tags_list, all_liked_tracks_removed, all_duplicates_removed, all_listened_removed, all_deleted_playlists, all_added_to_listened
+    return all_tags_list, all_removed_liked, all_removed_listened, all_removed_duplicates
 
 
 def delete(playlist_ids, confirm):
     deleted = []
 
     for playlist_id in playlist_ids:
-        process_listened_playlist(playlist_id, False, False, confirm)
+        process_listened_playlist(playlist_id, False, False, False, False, confirm)
 
         res = spotify_api.delete_playlist(playlist_id, confirm)
         if res:
