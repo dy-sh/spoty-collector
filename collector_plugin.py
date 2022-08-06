@@ -319,9 +319,11 @@ def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, use
         mirror_playlist_id = None
         mirror_name = ""
         skip_deleting = False
+        found = False
 
         # search playlist id mirrors list
         if playlist_id in mirrors_dict:
+            found = True
             m = mirrors_dict[playlist_id]
             mirror_playlist_id = get_playlist_id_by_name(m.mirror_name, user_playlists)
             mirror_name = m.mirror_name
@@ -340,10 +342,11 @@ def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, use
             mirrors = remain_mirrors
 
         # search playlist id user library
-        if mirror_playlist_id is None:
+        if not found:
             for playlist in user_playlists:
                 if playlist['id'] == playlist_id:
-                    mirror_name=playlist['name']
+                    found = True
+                    mirror_name = playlist['name']
                     mirror_playlist_id = playlist_id
                     # remove mirrors from list
                     remain_mirrors = []
@@ -364,11 +367,9 @@ def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, use
                     click.echo(
                         f'Mirror playlist "{mirror_name}" ({mirror_playlist_id}) removed from library.')
                 removed_playlists.append(mirror_playlist_id)
-        else:
+
+        if not found:
             click.echo(f'{playlist_id} not found in user library and mirrors list. Skipped.')
-            continue
-
-
 
     write_mirrors(mirrors)
 

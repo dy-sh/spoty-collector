@@ -104,20 +104,18 @@ Unsubscribe from all specified playlists.
 
 @collector.command("unsub-group")
 @click.argument("group_name")
-@click.option('--remove-mirror', '-r', is_flag=True,
-              help='Remove mirror playlists from the library.')
-@click.option('--remove-tracks', '-t', is_flag=True,
-              help='Remove tracks in mirror playlists that exist in unsubscribed playlists.')
+@click.option('--do-not-remove', '-r', is_flag=True,
+              help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists.')
-def unsubscribe_group(group_name, remove_mirror, remove_tracks, confirm):
+def unsubscribe_group(group_name, do_not_remove, confirm):
     """
 Unsubscribe from all playlists in specified group.
     """
     group_name = group_name.upper()
     mirrors = col.read_mirrors(group_name)
     playlist_ids = col.get_subscribed_playlist_dict(mirrors)
-    unsubscribed = col.unsubscribe(playlist_ids, remove_mirror, confirm)
+    unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
     mirrors = col.read_mirrors()
     all_subs = col.get_subscribed_playlist_dict(mirrors)
     click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
