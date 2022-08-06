@@ -358,11 +358,12 @@ def __get_playlist_info_thread(csv_filenames, params: FindBestTracksParams, coun
     result.put(r)
 
 
-def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: str):
+def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: str, update=True):
     infos.reverse()
     added_playlists = 0
     small_tracks = 0
     small_added = False
+    sub_ids=[]
     for info in infos:
         if added_playlists >= count:
             break
@@ -371,6 +372,7 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
             if small_tracks < 1000:
                 mirror_name = mirror_playlist_prefix + group
                 col.subscribe([info.playlist_id], mirror_name, group, True, False)
+                sub_ids.append(info.playlist_id)
                 small_tracks += not_listened_count
                 if not small_added:
                     added_playlists += 1
@@ -378,7 +380,11 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
         else:
             mirror_name = mirror_playlist_prefix + group + " - " + info.playlist_name
             col.subscribe([info.playlist_id], mirror_name, group, True, True)
+            sub_ids.append(info.playlist_id)
             added_playlists += 1
+
+    if added_playlists>0:
+        col.update(sub_ids)
 
 
 def cache_user_library(only_new=False):

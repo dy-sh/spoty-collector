@@ -464,9 +464,11 @@ Provide playlist IDs or  URIs as argument.
               help='Regular expression to take reference playlists from the library.')
 @click.option('--ref-id', '--rid', type=str, multiple=True,
               help='IDs or URIs to take reference playlists from the library.')
+@click.option('--confirm', '-y', is_flag=True,
+              help='Do not ask for any confirmations.')
 def find_best_in_cache(filter_names, min_not_listened, limit, min_listened, min_ref_percentage, min_ref_tracks,
                        sorting, reverse_sorting, listened_accuracy, fav_weight, ref_weight, prob_weight,
-                       subscribe_count, subscribe_group, ref, ref_id):
+                       subscribe_count, subscribe_group, ref, ref_id,confirm):
     """
 Searches through cached playlists and finds the best ones.
 
@@ -508,7 +510,7 @@ To speed up the library search, you can temporarily cache your library using the
     print_playlist_infos(infos, limit)
 
     if subscribe_count > 0 and len(infos) > 0:
-        if not click.confirm(f'Are you sure you want to add top {subscribe_count} playlists to the library?',
+        if not confirm and not click.confirm(f'Are you sure you want to add top {subscribe_count} playlists to the library?',
                              abort=True):
             click.echo("\nAborted")
             exit()
