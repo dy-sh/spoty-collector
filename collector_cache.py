@@ -45,7 +45,7 @@ if not os.path.isdir(library_cache_dir):
 def get_cached_playlists_dict(use_library_dir=False) -> dict[str, [str, str]]:
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
-    click.echo("Reading cache playlists directory")
+    click.echo("\nReading cache playlists directory")
     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
     res = {}
 
