@@ -86,21 +86,21 @@ PLAYLIST_IDS - IDs or URIs of subscribed playlists or mirror playlists
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
 
+    mirrors = col.read_mirrors()
+    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
+
     if group is None and filter_names is None and len(playlist_ids) == 0:
         click.confirm(f'Are you sure you want to unsubscribe all mirrors?', abort=True)
         unsubscribed = col.unsubscribe_all(not do_not_remove, confirm)
     else:
-        if group is not None:
-            group = group.upper()
-            mirrors = col.read_mirrors(group)
-            ids = col.mirrors_dict_by_sub_playlist_ids(mirrors)
-            ids = list(ids.keys())
-            playlist_ids.extend(ids)
+        if group is not None or filter_names is not None:
+            if len(playlist_ids) > 0:
+                click.echo("Please, use playlist_ids or --group/--filter-names params. But not together.")
+                exit()
+            unsubscribed = col.unsubscribe_all(not do_not_remove, confirm, group, filter_names)
+        else:
+            unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
 
-        unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm, None, filter_names)
-
-    mirrors = col.read_mirrors()
-    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     click.echo(f'{len(unsubscribed)}/{len(all_subs)} playlists unsubscribed.')
 
 

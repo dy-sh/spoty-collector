@@ -219,16 +219,8 @@ def find_mirror_by_id(playlist_id: str, mirrors: dict[str, Mirror], user_playlis
     return None
 
 
-def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, user_playlists: list = None,
-                filter_names: str = None):
+def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, user_playlists: list = None):
     mirrors = read_mirrors()
-
-    if filter_names is not None:
-        filtered = {}
-        for name, m in mirrors.items():
-            if re.search(filter_names.upper(), name.upper()):
-                filtered[m.name] = m
-        mirrors = filtered
 
     unsubscribed = []
     removed = []
@@ -270,8 +262,16 @@ def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, use
     return unsubscribed
 
 
-def unsubscribe_all(remove_mirrors=True, confirm=False):
-    mirrors = read_mirrors()
+def unsubscribe_all(remove_mirrors=True, confirm=False, group:str=None,filter_names: str = None):
+    mirrors = read_mirrors(group)
+
+    if filter_names is not None:
+        filtered = {}
+        for name, m in mirrors.items():
+            if re.search(filter_names.upper(), name.upper()):
+                filtered[m.name] = m
+        mirrors = filtered
+
     subs = mirrors_dict_by_sub_playlist_ids(mirrors)
     ids = list(subs.keys())
     unsubscribed = unsubscribe(ids, remove_mirrors, confirm)
@@ -297,11 +297,14 @@ def list_mirrors(playlist_ids: List[str], filter_names: str = None):
     user_playlists = spotify_api.get_list_of_playlists()
     find_mirror_playlists_in_library(mirrors, user_playlists)
 
-    if playlist_ids is not None and len(playlist_ids)>0:
+    if playlist_ids is not None and len(playlist_ids) > 0:
         filtered = {}
         for playlist_id in playlist_ids:
             playlist_id = spotify_api.parse_playlist_id(playlist_id)
             m = find_mirror_by_id(playlist_id, mirrors, user_playlists)
+            if m is None:
+                click.echo(f'Mirror {playlist_id} not found. Skipped.')
+                continue
             filtered[m.name] = m
         mirrors = filtered
 
