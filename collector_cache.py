@@ -415,7 +415,7 @@ def read_cached_playlist(csv_file_name):
     playlist_id, playlist_name = csv_playlist.get_csv_playlist_id_and_name(csv_file_name)
     if playlist_name == "":
         playlist_name = "Unknown"
-    tags = csv_playlist.read_tags_from_csv(csv_file_name, False, False, True)
+    tags = csv_playlist.read_tags_from_csv(csv_file_name, True, False, True)
     pl = {}
     pl['id'] = playlist_id
     pl['name'] = playlist_name

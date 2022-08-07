@@ -618,14 +618,6 @@ def get_user_library(group_name: str = None, filter_names=None, add_fav_to_liste
     listened_tracks = lis.read_listened_tracks()
     lib.listened_tracks.add_tracks(listened_tracks)
 
-    # if len(lib.mirrors) == 0:
-    #     click.echo('No mirror playlists found. Use "sub" command for subscribe to playlists.')
-    #     exit()
-    #
-    # if len(lib.listened_tracks) == 0:
-    #     click.echo('No listened tracks found. Use "listened" command for mark tracks as listened.')
-    #     exit()
-
     lib.all_playlists = spotify_api.get_list_of_playlists()
 
     # find fav playlists from spotify
@@ -789,12 +781,12 @@ def __get_playlist_names(col: TracksCollection, id=None, isrc=None, artists=None
             for title in col.track_ids[id][artist]:
                 playlist_names = col.track_ids[id][artist][title]
                 result |= playlist_names
-    elif isrc is not None and isrc in col.track_isrcs:
+    if isrc is not None and isrc in col.track_isrcs:
         for artist in col.track_isrcs[isrc]:
             for title in col.track_isrcs[isrc][artist]:
                 playlist_names = col.track_isrcs[isrc][artist][title]
                 result |= playlist_names
-    elif artists is not None and title is not None:
+    if artists is not None and title is not None:
         for artist in artists:
             if artist in col.track_artists:
                 if title in col.track_artists[artist]:
