@@ -37,14 +37,14 @@ Prints configuration parameters.
 @collector.command("sub")
 @click.option('--mirror-name', '--n',
               help='A mirror playlist with the specified name will be added to the library. You can subscribe to multiple playlists by merging them into one mirror. If not specified, the playlist name will be used as mirror name.')
-@click.option('--group-name', '--g', default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
+@click.option('--group', '--g', default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP, show_default=True,
               help='Mirror group name.')
 @click.option('--do-not-update', '-U', is_flag=True,
               help='Do not update mirror after subscription. Use "update" command to do it later.')
 @click.option('--from-cache', '-c', is_flag=True,
               help='Read playlist from cache.')
 @click.argument("playlist_ids", nargs=-1)
-def subscribe(playlist_ids, group_name, mirror_name, do_not_update, from_cache):
+def subscribe(playlist_ids, group, mirror_name, do_not_update, from_cache):
     """
 Subscribe to specified playlists (by playlist ID or URI).
 Next, use "update" command to create mirrors and update it (see "update --help").
@@ -58,7 +58,7 @@ If NONE is specified as the group name, then the name pattern will not be used. 
 If the name of the mirror is not specified, then the name of each playlist that we subscribe to will be used as the name. If a name is specified, then all listed playlists will use the same mirror name and as a result, they will be merged into one playlist.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, group_name, from_cache, False)
+    new_subs, new_mirrors = col.subscribe(playlist_ids, mirror_name, group, from_cache, False)
     mirrors = col.read_mirrors()
     all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
     click.echo('--------------------------------------')
@@ -151,15 +151,15 @@ Display a list of mirrors and subscribed playlists.
 
 
 @collector.command("update")
-@click.option('--mirror-group', '--g',
+@click.option('--group', '--g',
               help='Mirror group name (all if not specified).')
 @click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists.')
-@click.option('--mirror-id', '---m', multiple=True,
-              help='Update only specified mirrors.')
+@click.option('--playlist-id', '--id', multiple=True,
+              help='Update only specified playlists. Specify subscribed playlist id or mirror playlist id.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for delete mirror playlist confirmation.')
-def update(mirror_group, do_not_remove, confirm, mirror_id):
+def update(group, do_not_remove, confirm, playlist_id):
     """
 Update all subscriptions.
 
@@ -169,8 +169,8 @@ When executed, the following will happen:
 - New tracks from subscribed playlists will be added to exist mirror playlists. Tracks that you have already listened to will not be added to the mirrored playlist.
 - All tracks with likes will be added to listened list and removed from mirror playlists.
     """
-    mirror_ids = spoty.utils.tuple_to_list(mirror_id)
-    col.update(not do_not_remove, confirm, mirror_ids, mirror_group)
+    playlist_id = spoty.utils.tuple_to_list(playlist_id)
+    col.update(not do_not_remove, confirm, playlist_id, group)
 
 
 @collector.command("del")
