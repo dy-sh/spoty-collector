@@ -219,8 +219,16 @@ def find_mirror_by_id(playlist_id: str, mirrors: dict[str, Mirror], user_playlis
     return None
 
 
-def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, user_playlists: list = None):
+def unsubscribe(playlist_ids: List[str], remove_mirrors=True, confirm=False, user_playlists: list = None,
+                filter_names: str = None):
     mirrors = read_mirrors()
+
+    if filter_names is not None:
+        filtered = {}
+        for name, m in mirrors.items():
+            if re.search(filter_names.upper(), name.upper()):
+                filtered[m.name] = m
+        mirrors = filtered
 
     unsubscribed = []
     removed = []
@@ -276,32 +284,46 @@ def unsubscribe_mirrors_by_name(mirror_names, remove_mirrors, confirm):
     return unsubscribe(ids, remove_mirrors, confirm)
 
 
-def list_playlists(group_name: str = None):
-    if group_name is not None:
-        group_name = group_name.upper()
+def list_mirrors(playlist_ids: List[str], filter_names: str = None):
+    mirrors = read_mirrors()
 
-    mirrors = read_mirrors(group_name)
+    if filter_names is not None:
+        filtered = {}
+        for name, m in mirrors.items():
+            if re.search(filter_names.upper(), name.upper()):
+                filtered[m.name] = m
+        mirrors = filtered
+
     user_playlists = spotify_api.get_list_of_playlists()
     find_mirror_playlists_in_library(mirrors, user_playlists)
+
+    if playlist_ids is not None and len(playlist_ids)>0:
+        filtered = {}
+        for playlist_id in playlist_ids:
+            playlist_id = spotify_api.parse_playlist_id(playlist_id)
+            m = find_mirror_by_id(playlist_id, mirrors, user_playlists)
+            filtered[m.name] = m
+        mirrors = filtered
 
     mirrors_dict = mirrors_dict_by_group(mirrors)
 
     for group_name, mirrors_in_grp in mirrors_dict.items():
         click.echo(f'\n============================= Group "{group_name}" =================================')
-        for mirror in mirrors_in_grp:
+        for i, mirror in enumerate(mirrors_in_grp):
             click.echo(f'Mirror: {mirror.name}')
             if mirror.playlist_id is not None:
                 click.echo(f'Playlist: {mirror.playlist_id}')
             else:
                 click.echo(f'Playlist: NOT CREATED')
             click.echo(f'Subscribed playlists:')
-            for i, pl in enumerate(mirror.subscribed_playlist_ids):
+            for pl in mirror.subscribed_playlist_ids:
                 click.echo(f'   {pl}')
-            click.echo(f'-------------------------------------------')
+            if i + 1 < len(mirrors_in_grp):
+                click.echo(f'-------------------------------------------')
 
-    click.echo(f'----------------------------------------------------------------------------')
+    click.echo(f'==========================================================================')
     all_playlists = mirrors_dict_by_sub_playlist_ids(mirrors)
-    click.echo(f'Total {len(all_playlists)} subscribed playlists in {len(mirrors)} mirrors.')
+    click.echo(f'{len(all_playlists)} subscribed playlists in {len(mirrors)} mirrors.')
 
 
 def update(remove_empty_mirrors=False, confirm=False, playlist_ids: List[str] = None, group_name: str = None,

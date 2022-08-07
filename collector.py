@@ -66,88 +66,70 @@ If the name of the mirror is not specified, then the name of each playlist that 
     if not do_not_update and len(new_mirrors) > 0:
         click.echo('--------------------------------------')
         click.echo("Updating...")
-        col.update(False, False, new_subs,None,from_cache)
+        col.update(False, False, new_subs, None, from_cache)
 
 
 @collector.command("unsub")
-@click.argument("playlist_ids", nargs=-1)
+@click.option('--group', '--g',
+              help='Mirror group name. All mirrors of this group will me unsubscribed.')
+@click.option('--filter-names', '--fn',
+              help='Get only mirrors whose names matches this regex filter')
 @click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists from the library.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for confirmation of deleting playlists and tracks.')
-def unsubscribe(playlist_ids, do_not_remove, confirm):
+@click.argument("playlist_ids", nargs=-1)
+def unsubscribe(playlist_ids, group, filter_names, do_not_remove, confirm):
     """
-Unsubscribe from the specified playlists (by playlist ID or URI).
-
+Unsubscribe from the specified playlists.
 PLAYLIST_IDS - IDs or URIs of subscribed playlists or mirror playlists
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
+
+    if group is None and filter_names is None and len(playlist_ids) == 0:
+        click.confirm(f'Are you sure you want to unsubscribe all mirrors?', abort=True)
+        unsubscribed = col.unsubscribe_all(not do_not_remove, confirm)
+    else:
+        if group is not None:
+            group = group.upper()
+            mirrors = col.read_mirrors(group)
+            ids = col.mirrors_dict_by_sub_playlist_ids(mirrors)
+            ids = list(ids.keys())
+            playlist_ids.extend(ids)
+
+        unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm, None, filter_names)
+
     mirrors = col.read_mirrors()
     all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
-    click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
-
-
-@collector.command("unsub-all")
-@click.option('--do-not-remove', '-R', is_flag=True,
-              help='Do not remove mirror playlists from the library.')
-@click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for confirmation of deleting playlists.')
-def unsubscribe_all(do_not_remove, confirm):
-    """
-Unsubscribe from all specified playlists.
-    """
-    unsubscribed = col.unsubscribe_all(not do_not_remove, confirm)
-    mirrors = col.read_mirrors()
-    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
-    click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
-
-
-@collector.command("unsub-group")
-@click.argument("group_name")
-@click.option('--do-not-remove', '-R', is_flag=True,
-              help='Do not remove mirror playlists from the library.')
-@click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for confirmation of deleting playlists.')
-def unsubscribe_group(group_name, do_not_remove, confirm):
-    """
-Unsubscribe from all playlists in specified group.
-    """
-    group_name = group_name.upper()
-    mirrors = col.read_mirrors(group_name)
-    playlist_ids = col.mirrors_dict_by_sub_playlist_ids(mirrors)
-    unsubscribed = col.unsubscribe(playlist_ids, not do_not_remove, confirm)
-    mirrors = col.read_mirrors()
-    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
-    click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
-
-
-@collector.command("unsub-name")
-@click.argument("mirror_names", nargs=-1)
-@click.option('--do-not-remove', '-R', is_flag=True,
-              help='Do not remove mirror playlists from the library.')
-@click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask for confirmation of deleting playlists.')
-def unsubscribe_name(mirror_names, do_not_remove, confirm):
-    """
-Unsubscribe from playlists for which the specified mirror has been created.
-MIRROR_NAMES - names of mirror playlists.
-    """
-    mirror_names = spoty.utils.tuple_to_list(mirror_names)
-    unsubscribed = col.unsubscribe_mirrors_by_name(mirror_names, not do_not_remove, confirm)
-    mirrors = col.read_mirrors()
-    all_subs = col.mirrors_dict_by_sub_playlist_ids(mirrors)
-    click.echo(f'{len(unsubscribed)} playlists unsubscribed (subscriptions remain: {len(all_subs)}).')
+    click.echo(f'{len(unsubscribed)}/{len(all_subs)} playlists unsubscribed.')
 
 
 @collector.command("list")
-@click.option('--mirror-group', '--g',
-              help='Mirror group name (all if not specified).')
-def list_mirrors(mirror_group):
+@click.option('--group', '--g',
+              help='Mirror group name. All mirrors of this group will me unsubscribed.')
+@click.option('--filter-names', '--fn',
+              help='Get only mirrors whose names matches this regex filter')
+@click.argument("playlist_ids", nargs=-1)
+def list_mirrors(playlist_ids, group, filter_names):
     """
 Display a list of mirrors and subscribed playlists.
     """
-    col.list_playlists(mirror_group)
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+
+    if group is None and filter_names is None and len(playlist_ids) == 0:
+        mirrors = col.read_mirrors()
+        ids = col.mirrors_dict_by_sub_playlist_ids(mirrors)
+        ids = list(ids.keys())
+        col.list_mirrors(ids)
+    else:
+        if group is not None:
+            group = group.upper()
+            mirrors = col.read_mirrors(group)
+            ids = col.mirrors_dict_by_sub_playlist_ids(mirrors)
+            ids = list(ids.keys())
+            playlist_ids.extend(ids)
+
+        col.list_mirrors(playlist_ids, filter_names)
 
 
 @collector.command("update")
@@ -459,7 +441,7 @@ Provide playlist IDs or  URIs as argument.
               help='Get only playlists whose names matches this regex filter')
 @click.option('--subscribe-count', '--sub', type=int, default=0, show_default=True,
               help='Add playlists to library. Specify how many top playlists to add. Small playlists will be merged into one playlist with approximately 100 tracks.')
-@click.option('--subscribe-group', '--group','--g', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP,
+@click.option('--subscribe-group', '--group', '--g', type=str, default=settings.COLLECTOR.DEFAULT_MIRROR_GROUP,
               show_default=True,
               help='Group playlists under a given name for convenience. Used in conjunction with --subscribe-count.')
 @click.option('--ref', '--r', type=str,
