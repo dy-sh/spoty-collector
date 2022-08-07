@@ -46,7 +46,7 @@ Prints configuration parameters.
 @click.argument("playlist_ids", nargs=-1)
 def subscribe(playlist_ids, group, mirror_name, do_not_update, from_cache):
     """
-Subscribe to specified playlists (by playlist ID or URI).
+Subscribe to specified playlists.
 Next, use "update" command to create mirrors and update it (see "update --help").
 
 The name of the playlist in the library will be formed according to the template:
@@ -143,7 +143,7 @@ Display a list of mirrors and subscribed playlists.
               help='Do not ask for delete mirror playlist confirmation.')
 def update(group, do_not_remove, confirm, playlist_id):
     """
-Update all subscriptions.
+Update mirrors.
 
 \b
 When executed, the following will happen:
@@ -161,7 +161,7 @@ When executed, the following will happen:
               help='Do not ask for delete playlist confirmation.')
 def delete(playlist_ids, confirm):
     """
-Delete playlists (by playlist ID or URI).
+Delete playlists.
 All specified playlists will be processed as listened and deleted.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
@@ -185,7 +185,7 @@ def clean_playlists(playlist_ids, no_remove_if_empty, no_remove_liked, no_remove
                     confirm):
     """
 \b
-Clean specified playlists.
+Clean playlists.
 When executed, the following will happen:
 - All already listened tracks will be removed from playlists.
 - All duplicates will be removed from playlists.
@@ -213,64 +213,6 @@ You can skip any of this step by options.
             and len(all_removed_duplicates) == 0 \
             and len(all_removed_listened) == 0:
         click.echo(f'The playlists are fine. No changes applied.')
-
-
-@collector.command("clean-filtered")
-@click.argument("filter-names")
-@click.option('--no-remove-duplicates', '-D', is_flag=True,
-              help='Do not remove duplicated tracks.')
-@click.option('--no-remove-liked', '-K', is_flag=True,
-              help='Do not remove liked tracks.')
-@click.option('--no-remove-listened', '-L', is_flag=True,
-              help='Do not remove liked tracks.')
-@click.option('--no-remove-if-empty', '-R', is_flag=True,
-              help='Do not remove empty playlists.')
-@click.option('--confirm', '-y', is_flag=True,
-              help='Do not ask any questions.')
-@click.pass_context
-def clean_playlists_by_regex(ctx, filter_names, no_remove_if_empty, no_remove_liked, no_remove_listened,
-                             no_remove_duplicates, confirm):
-    """
-This command works the same way as "clean" command, but accepts a regex which applies to playlist names instead of playlist IDs.
-
-\b
-Examples:
-    Clean all playlists, whose names start with "BEST":
-    spoty plug collector clean-filtered "^BEST"
-
-    Clean all playlists, whose names contain "rock":
-    spoty plug collector clean-filtered "rock"
-
-    Clean all playlists, whose names contain "rock", "Rock", "ROCK" (ignore case sensitivity):
-    spoty plug collector clean-filtered "(?i)rock"
-    """
-
-    playlists = spotify_api.get_list_of_playlists()
-
-    if len(playlists) == 0:
-        exit()
-
-    if filter_names is not None:
-        playlists = list(filter(lambda pl: re.findall(re.escape(filter_names), pl['name']), playlists))
-        click.echo(f'{len(playlists)} playlists matches the filter')
-
-    if len(playlists) == 0:
-        exit()
-
-    click.echo("Found playlists: ")
-    for playlist in playlists:
-        click.echo(f'  {playlist["id"]} "{playlist["name"]}"')
-
-    if not confirm:
-        click.confirm(f'Are you sure you want to clean {len(playlists)} playlists?', abort=True)
-
-    playlist_ids = []
-    for playlist in playlists:
-        playlist_ids.append(playlist['id'])
-
-    ctx.invoke(clean_playlists, playlist_ids=playlist_ids, no_remove_if_empty=no_remove_if_empty,
-               no_remove_liked=no_remove_liked, no_remove_listened=no_remove_listened,
-               no_remove_duplicates=no_remove_duplicates, confirm=confirm)
 
 
 @collector.command("optimize-listened-list")
