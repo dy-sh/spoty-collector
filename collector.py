@@ -137,11 +137,10 @@ Display a list of mirrors and subscribed playlists.
               help='Mirror group name (all if not specified).')
 @click.option('--do-not-remove', '-R', is_flag=True,
               help='Do not remove mirror playlists.')
-@click.option('--playlist-id', '--id', multiple=True,
-              help='Update only specified playlists. Specify subscribed playlist id or mirror playlist id.')
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for delete mirror playlist confirmation.')
-def update(group, do_not_remove, confirm, playlist_id):
+@click.argument("playlist_ids", nargs=-1)
+def update(group, do_not_remove, confirm, playlist_ids):
     """
 Update mirrors.
 
@@ -151,8 +150,8 @@ When executed, the following will happen:
 - New tracks from subscribed playlists will be added to exist mirror playlists. Tracks that you have already listened to will not be added to the mirrored playlist.
 - All tracks with likes will be added to listened list and removed from mirror playlists.
     """
-    playlist_id = spoty.utils.tuple_to_list(playlist_id)
-    col.update(not do_not_remove, confirm, playlist_id, group)
+    playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
+    col.update(not do_not_remove, confirm, playlist_ids, group)
 
 
 @collector.command("del")
