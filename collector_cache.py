@@ -370,21 +370,21 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
         not_listened_count = info.tracks_count - info.listened_tracks_count
         if not_listened_count < 20:
             if small_tracks < 1000:
-                mirror_name = mirror_playlist_prefix + group
-                col.subscribe([info.playlist_id], mirror_name, group, True, False)
-                sub_ids.append(info.playlist_id)
+                mirror_name = "MIX"
+                sub_playlist_ids, new_mirror_names = col.subscribe([info.playlist_id], mirror_name, group, True, False)
+                sub_ids.extend(sub_playlist_ids)
                 small_tracks += not_listened_count
                 if not small_added:
                     added_playlists += 1
                     small_added = True
         else:
-            mirror_name = mirror_playlist_prefix + group + " - " + info.playlist_name
-            col.subscribe([info.playlist_id], mirror_name, group, True, True)
-            sub_ids.append(info.playlist_id)
+            mirror_name = info.playlist_name
+            sub_playlist_ids, new_mirror_names =col.subscribe([info.playlist_id], mirror_name, group, True, True)
+            sub_ids.extend(sub_playlist_ids)
             added_playlists += 1
 
-    if added_playlists > 0:
-        col.update(sub_ids)
+    if update and len(sub_ids) > 0:
+        col.update(False,False,sub_ids)
 
 
 def cache_user_library(only_new=False):
