@@ -479,7 +479,7 @@ def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked=Tr
     removed_listened = []
     if remove_listened:
         if len(tags_list) > 0:
-            not_listened, listened = lis.get_not_listened_tracks(tags_list, False)
+            not_listened, listened = lis.get_not_listened_tracks(tags_list)
             ids = spotify_api.get_track_ids_from_tags_list(listened)
             if len(ids) > 0:
                 spotify_api.remove_tracks_from_playlist(playlist_id, ids)

@@ -89,16 +89,11 @@ def clean_listened():
     return good, duplicates
 
 
-def get_not_listened_tracks(tracks: list, show_progressbar=False, all_listened_tracks_dict: dict = None):
-    if all_listened_tracks_dict is None:
-        all_listened_tracks = read_listened_tracks(['ISRC', 'SPOTY_LENGTH'])
-        all_listened_tracks_dict = utils.tags_list_to_dict_by_isrc_and_length(all_listened_tracks)
+def get_not_listened_tracks(tracks: list,  all_listened_tracks: list=None):
+    if all_listened_tracks is None:
+        all_listened_tracks = read_listened_tracks(['ISRC', 'ARTIST','TITLE'])
 
-    # listened_tracks = []
-    # new_tags_list, listened = utils.remove_exist_tags(all_listened, new_tags_list, ['SPOTIFY_TRACK_ID'], False)
-    # listened_tags_list.extend(listened)
 
-    new_tracks, listened_tracks = utils.remove_exist_tags_by_isrc_and_length_dict(
-        all_listened_tracks_dict, tracks, show_progressbar)
+    new_tracks, listened_tracks = utils.remove_exist_tags_by_isrc_artist_title(all_listened_tracks,tracks)
     return new_tracks, listened_tracks
 
