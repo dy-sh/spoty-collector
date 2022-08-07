@@ -213,11 +213,13 @@ You can skip any of this step by options.
     """
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
 
-    all_tags_list, all_removed_liked, all_removed_listened, all_removed_duplicates = \
+    all_tags_list, all_added_to_listened, all_removed_liked, all_removed_listened, all_removed_duplicates = \
         col.process_listened_playlists(playlist_ids, not no_remove_if_empty, not no_remove_liked,
                                        not no_remove_listened, not no_remove_duplicates, confirm)
     click.echo('--------------------------------------')
     click.echo(f'{len(all_tags_list)} tracks total in specified playlists.')
+    if len(all_added_to_listened) > 0:
+        click.echo(f'{len(all_removed_liked)} liked tracks added to listened list.')
     if len(all_removed_liked) > 0:
         click.echo(f'{len(all_removed_liked)} liked tracks removed.')
     if len(all_removed_duplicates) > 0:

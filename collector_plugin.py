@@ -403,8 +403,10 @@ def update(remove_empty_mirrors=False, confirm=False, playlist_ids: List[str] = 
             all_mirror_tracks = not_liked
 
             if m.playlist_id is not None:
-                mirror_tags_list, removed_liked, removed_listened, removed_duplicates = \
+                mirror_tags_list, added_to_listened, removed_liked, removed_listened, removed_duplicates = \
                     process_listened_playlist(m.playlist_id, remove_empty_mirrors, True, True, True, confirm)
+
+                all_liked_added_to_listened.extend(removed_listened)
 
                 # remove tracks already exist in mirror
                 all_mirror_tracks, already_exist = utils.remove_exist_tags(mirror_tags_list, all_mirror_tracks,
@@ -440,9 +442,9 @@ def update(remove_empty_mirrors=False, confirm=False, playlist_ids: List[str] = 
         click.echo(f'{len(all_liked)} tracks liked (not added to mirrors).')
     if len(all_duplicates) > 0:
         click.echo(f'{len(all_duplicates)} duplicates (not added to mirrors).')
+    click.echo(f'{len(all_added_to_mirrors)} new tracks added to mirrors.')
     if len(all_liked_added_to_listened) > 0:
         click.echo(f'{len(all_liked_added_to_listened)} liked tracks added to listened list.')
-    click.echo(f'{len(all_added_to_mirrors)} new tracks added to mirrors.')
 
 
 def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked=True, remove_listened=True,
@@ -457,7 +459,7 @@ def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked=Tr
 
     # add tracks to listened
     liked_tags_list, not_liked_tags_list = spotify_api.get_liked_tags_list(tags_list)
-    lis.add_tracks_to_listened(liked_tags_list)
+    added_to_listened, already_listened = lis.add_tracks_to_listened(liked_tags_list)
 
     # remove liked tracks from playlist
     removed_liked = []
@@ -503,7 +505,7 @@ def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked=Tr
                 click.echo(
                     f'\nMirror playlist "{playlist_name}" ({playlist_id}) is empty and has been removed from library.')
 
-    return tags_list, removed_liked, removed_listened, removed_duplicates
+    return tags_list, added_to_listened, removed_liked, removed_listened, removed_duplicates
 
 
 def process_listened_playlists(playlist_ids, remove_if_empty=True, remove_liked=True, remove_listened=True,
@@ -512,6 +514,7 @@ def process_listened_playlists(playlist_ids, remove_if_empty=True, remove_liked=
     all_removed_liked = []
     all_removed_listened = []
     all_removed_duplicates = []
+    all_added_to_listened = []
 
     bar_showed = len(playlist_ids) > 1
     if bar_showed:
@@ -520,13 +523,14 @@ def process_listened_playlists(playlist_ids, remove_if_empty=True, remove_liked=
     for playlist_id in playlist_ids:
         playlist_id = spotify_api.parse_playlist_id(playlist_id)
 
-        tags_list, removed_liked, removed_listened, removed_duplicates = \
+        tags_list, added_to_listened, removed_liked, removed_listened, removed_duplicates = \
             process_listened_playlist(playlist_id, remove_if_empty, remove_liked, remove_listened, remove_duplicates,
                                       confirm)
         all_tags_list.extend(tags_list)
         all_removed_liked.extend(removed_liked)
         all_removed_listened.extend(removed_listened)
         all_removed_duplicates.extend(removed_duplicates)
+        all_added_to_listened.extend(added_to_listened)
 
         if bar_showed:
             bar.update(1)
@@ -534,7 +538,7 @@ def process_listened_playlists(playlist_ids, remove_if_empty=True, remove_liked=
     if bar_showed:
         click.echo()  # new line
 
-    return all_tags_list, all_removed_liked, all_removed_listened, all_removed_duplicates
+    return all_tags_list, all_added_to_listened, all_removed_liked, all_removed_listened, all_removed_duplicates
 
 
 def delete(playlist_ids, confirm):
