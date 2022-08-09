@@ -487,6 +487,8 @@ def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked=Tr
     # add tracks to listened
     liked_tags_list, not_liked_tags_list = spotify_api.get_liked_tags_list(tags_list)
     added_to_listened, already_listened = lis.add_tracks_to_listened(liked_tags_list)
+    if len(added_to_listened) > 0:
+        click.echo(f'\n{len(added_to_listened)} liked tracks added to listened from playlist "{playlist_name}"')
 
     # remove liked tracks from playlist
     removed_liked = []
@@ -497,10 +499,8 @@ def process_listened_playlist(playlist_id, remove_if_empty=True, remove_liked=Tr
             tags_list, removed_liked = utils.remove_exist_tags(liked_tags_list, tags_list, ['SPOTIFY_TRACK_ID'])
             if len(removed_liked) > 0:
                 click.echo(
-                    f'\n{len(removed_liked)} liked tracks added to listened and removed from playlist "{playlist_name}"')
-    else:
-        if len(liked_tags_list) > 0:
-            click.echo(f'\n{len(removed_liked)} liked tracks added to listened from playlist "{playlist_name}"')
+                    f'\n{len(removed_liked)} tracks removed from playlist "{playlist_name}"')
+
 
     # remove listened tracks
     removed_listened = []
