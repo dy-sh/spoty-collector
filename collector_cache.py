@@ -234,6 +234,13 @@ def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=Fals
     click.echo("Reading cache playlists directory")
     csvs_in_path = csv_playlist.find_csvs_in_path(read_dir)
 
+    infos = []
+    unique_tracks = {}
+    total_tracks_count = 0
+
+    if len(csvs_in_path) == 0:
+        return infos, total_tracks_count, unique_tracks
+
     if params.filter_names is not None:
         filtered_csvs = []
         with click.progressbar(length=len(csvs_in_path), label=f'Filtering cached playlists') as bar:
@@ -251,10 +258,8 @@ def get_cached_playlists_info(params: FindBestTracksParams, use_library_dir=Fals
         if len(csvs_in_path) == 0:
             exit()
 
-    infos = []
-
-    unique_tracks = {}
-    total_tracks_count = 0
+    if len(csvs_in_path) == 0:
+        return infos, total_tracks_count, unique_tracks
 
     # multi thread
     try:
@@ -379,12 +384,12 @@ def sub_top_playlists_from_cache(infos: List[PlaylistInfo], count: int, group: s
                     small_added = True
         else:
             mirror_name = info.playlist_name
-            sub_playlist_ids, new_mirror_names =col.subscribe([info.playlist_id], mirror_name, group, True, True)
+            sub_playlist_ids, new_mirror_names = col.subscribe([info.playlist_id], mirror_name, group, True, True)
             sub_ids.extend(sub_playlist_ids)
             added_playlists += 1
 
     if update and len(sub_ids) > 0:
-        col.update(False,False,sub_ids)
+        col.update(False, False, sub_ids)
 
 
 def cache_user_library(only_new=False):
