@@ -84,7 +84,11 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
     for playlist_id in playlist_ids:
         if playlist_id in cached_playlists:
             if overwrite_exist:
-                os.remove(cached_playlists[playlist_id][1])
+                try:
+                    os.remove(cached_playlists[playlist_id][1])
+                except:
+                    # click.echo("Cant delete file: " + cached_playlists[playlist_id][1])
+                    pass
             else:
                 exist_playlists.append(playlist_id)
                 continue
