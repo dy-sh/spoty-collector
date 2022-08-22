@@ -93,11 +93,14 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
             file_name = cached_playlists[playlist_id][1]
 
             if expired_min > 0:
-                file_date = os.path.getmtime(file_name) / 60
-                now = time.time() / 60
-                if now - file_date < expired_min:
-                    exist_playlists.append(playlist_id)
-                    continue
+                try:
+                    file_date = os.path.getmtime(file_name) / 60
+                    now = time.time() / 60
+                    if now - file_date < expired_min:
+                        exist_playlists.append(playlist_id)
+                        continue
+                except:
+                    pass
 
             try:
                 os.remove(file_name)
