@@ -71,8 +71,8 @@ def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exis
     for playlist in playlists:
         ids.append(playlist['id'])
 
-    new, old, all_old = cache_add_by_ids(ids, use_library_dir, overwrite_exist, write_empty, expired_min)
-    return new, old, all_old
+    new, old, overwritten, all_old = cache_add_by_ids(ids, use_library_dir, overwrite_exist, write_empty, expired_min)
+    return new, old, overwritten, all_old
 
 
 def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False, expired_min=0):
@@ -82,6 +82,8 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
 
     new_playlists = []
     exist_playlists = []
+    overwritten_playlists = []
+
     for playlist_id in playlist_ids:
         if playlist_id in cached_playlists:
             if not overwrite_exist:
@@ -99,6 +101,7 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
 
             try:
                 os.remove(file_name)
+                overwritten_playlists.append(playlist_id)
             except:
                 # click.echo("Cant delete file: " + file_name)
                 pass
@@ -122,7 +125,7 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
             cache_file_name = os.path.join(read_dir, file_name)
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False, write_empty)
 
-    return new_playlists, exist_playlists, cached_playlists
+    return new_playlists, exist_playlists, overwritten_playlists, cached_playlists
 
 
 def read_cached_playlists(use_library_dir=False):
@@ -412,7 +415,7 @@ def cache_user_library(only_new=False):
     all_playlists = spotify_api.get_list_of_playlists()
     for playlist in all_playlists:
         ids.append(playlist['id'])
-    new_playlists, exist_playlists, cached_playlists = cache_add_by_ids(ids, True, not only_new, True, 0)
+    new_playlists, exist_playlists, overwritten, cached_playlists = cache_add_by_ids(ids, True, not only_new, True, 0)
     return new_playlists, exist_playlists, cached_playlists
 
 
