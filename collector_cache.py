@@ -64,17 +64,18 @@ def get_cached_playlists_dict(use_library_dir=False) -> dict[str, [str, str]]:
     return res
 
 
-def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False):
+def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False, write_empty=False,
+                      expired_min=0):
     playlists = spotify_api.find_playlist_by_query(search_query, limit)
     ids = []
     for playlist in playlists:
         ids.append(playlist['id'])
 
-    new, old, all_old = cache_add_by_ids(ids, use_library_dir, overwrite_exist)
+    new, old, all_old = cache_add_by_ids(ids, use_library_dir, overwrite_exist, write_empty, expired_min)
     return new, old, all_old
 
 
-def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False):
+def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False, expired_min=0):
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
     cached_playlists = get_cached_playlists_dict(use_library_dir)
@@ -83,15 +84,25 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
     exist_playlists = []
     for playlist_id in playlist_ids:
         if playlist_id in cached_playlists:
-            if overwrite_exist:
-                try:
-                    os.remove(cached_playlists[playlist_id][1])
-                except:
-                    # click.echo("Cant delete file: " + cached_playlists[playlist_id][1])
-                    pass
-            else:
+            if not overwrite_exist:
                 exist_playlists.append(playlist_id)
                 continue
+
+            file_name = cached_playlists[playlist_id][1]
+
+            if expired_min > 0:
+                file_date = os.path.getmtime(file_name) / 60
+                now = time.time() / 60
+                if now - file_date < expired_min:
+                    exist_playlists.append(playlist_id)
+                    continue
+
+            try:
+                os.remove(file_name)
+            except:
+                # click.echo("Cant delete file: " + file_name)
+                pass
+
         new_playlists.append(playlist_id)
 
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
@@ -401,7 +412,7 @@ def cache_user_library(only_new=False):
     all_playlists = spotify_api.get_list_of_playlists()
     for playlist in all_playlists:
         ids.append(playlist['id'])
-    new_playlists, exist_playlists, cached_playlists = cache_add_by_ids(ids, True, not only_new, True)
+    new_playlists, exist_playlists, cached_playlists = cache_add_by_ids(ids, True, not only_new, True, 0)
     return new_playlists, exist_playlists, cached_playlists
 
 

@@ -142,7 +142,7 @@ Display a list of mirrors and subscribed playlists.
 @click.option('--confirm', '-y', is_flag=True,
               help='Do not ask for delete mirror playlist confirmation.')
 @click.argument("playlist_ids", nargs=-1)
-def update(group, do_not_remove, confirm, playlist_ids,do_not_update_cached):
+def update(group, do_not_remove, confirm, playlist_ids, do_not_update_cached):
     """
 Update mirrors.
 
@@ -299,8 +299,10 @@ def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None
               help='Overwrite exist cached playlists.')
 @click.option('--limit', type=int, default=1000, show_default=True,
               help='Limit the number of processed playlists (max 1000 due to spotify api limit).')
+@click.option('--expired-min', '--e', type=int, default=0, show_default=True,
+              help='Overwrite only if the file was created more than the specified number of minutes ago.')
 @click.argument("search_query")
-def cache_add(search_query, limit, overwrite):
+def cache_add(search_query, limit, overwrite, expired_min):
     """
 \b
 Find public playlists by specified search query and cache them (save to csv files on disk).
@@ -310,30 +312,32 @@ Example:
 spoty plug collector cache-add "jazz"
     """
 
-    new, old, all_old = cache.cache_add_by_name(search_query, limit, False, overwrite)
+    new, old, all_old = cache.cache_add_by_name(search_query, limit, False, overwrite, False, expired_min)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
     click.echo(f'Skipped already cached playlists: {len(old)}')
-    click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
+    click.echo(f'Total cached playlists: {len(old) + len(new)}')
 
 
 @collector.command("cache-add-id")
 @click.option('--overwrite', '-o', is_flag=True,
               help='Overwrite exist cached playlists.')
+@click.option('--expired-min', '--e', type=int, default=0, show_default=True,
+              help='Overwrite only if the file was created more than the specified number of minutes ago.')
 @click.argument("playlist_ids", nargs=-1)
-def cache_add_id(playlist_ids, overwrite):
+def cache_add_id(playlist_ids, overwrite, expired_min):
     """
 Cache playlist with specified id (save to csv files on disk).
     """
 
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new, old, all_old = cache.cache_add_by_ids(playlist_ids, False, overwrite)
+    new, old, all_old = cache.cache_add_by_ids(playlist_ids, False, overwrite, False, expired_min)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists: {len(new)}')
     click.echo(f'Skipped already cached playlists: {len(old)}')
-    click.echo(f'Total cached playlists: {len(all_old) + len(new)}')
+    click.echo(f'Total cached playlists: {len(old) + len(new)}')
 
 
 @collector.command("info")
