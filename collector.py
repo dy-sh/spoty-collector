@@ -315,10 +315,10 @@ spoty plug collector cache-add "jazz"
     new, old, overwritten, all_old = cache.cache_add_by_name(search_query, limit, False, overwrite, False, expired_min)
 
     click.echo("\n======================================================================\n")
-    click.echo(f'New cached playlists: {len(new) - len(overwritten)}')
-    click.echo(f'Overwritten cached playlists: {len(overwritten)}')
-    click.echo(f'Skipped already cached playlists: {len(old)}')
-    click.echo(f'Total cached playlists: {len(all_old) + len(new) - len(overwritten)}')
+    click.echo(f'New cached playlists             : {len(new) - len(overwritten)}')
+    click.echo(f'Overwritten cached playlists     : {len(overwritten)}')
+    click.echo(f'Skipped already cached playlists : {len(old)}')
+    click.echo(f'Total cached playlists           : {len(all_old) + len(new) - len(overwritten)}')
 
 
 @collector.command("cache-add-id")
@@ -336,10 +336,10 @@ Cache playlist with specified id (save to csv files on disk).
     new, old, overwritten, all_old = cache.cache_add_by_ids(playlist_ids, False, overwrite, False, expired_min)
 
     click.echo("\n======================================================================\n")
-    click.echo(f'New cached playlists: {len(new) - len(overwritten)}')
-    click.echo(f'Overwritten cached playlists: {len(overwritten)}')
-    click.echo(f'Skipped already cached playlists: {len(old)}')
-    click.echo(f'Total cached playlists:  {len(all_old) + len(new) - len(overwritten)}')
+    click.echo(f'New cached playlists             : {len(new) - len(overwritten)}')
+    click.echo(f'Overwritten cached playlists     : {len(overwritten)}')
+    click.echo(f'Skipped already cached playlists : {len(old)}')
+    click.echo(f'Total cached playlists           : {len(all_old) + len(new) - len(overwritten)}')
 
 
 @collector.command("info")
