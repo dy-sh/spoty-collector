@@ -647,7 +647,7 @@ def read_cache_catalog(use_library_dir=False) -> {}:
     if not os.path.isfile(file_name):
         return catalog
 
-    with open(file_name) as f:
+    with open(file_name, encoding='utf-8-sig') as f:
         for line in f:
             if len(line) < 2:
                 continue
@@ -664,7 +664,7 @@ def write_cache_catalog(catalog, use_library_dir=False):
         file_name = library_cache_catalog_file_name
     else:
         file_name = cache_catalog_file_name
-    with open(file_name, "w") as cache_catalog_file:
+    with open(file_name, "w", encoding='utf-8-sig') as cache_catalog_file:
         for id, data in catalog.items():
             file_date = data[0]
             base_name = data[1]
@@ -695,7 +695,7 @@ def append_cache_catalog(cache_file_names: List[str], use_library_dir=False):
         dir = cache_dir
         file_name = cache_catalog_file_name
 
-    with open(file_name, "a") as cache_catalog_file:
+    with open(file_name, "a", encoding='utf-8-sig') as cache_catalog_file:
         for cache_file_name in cache_file_names:
             rel_filename = os.path.relpath(cache_file_name, dir)
             rel_basename = os.path.splitext(rel_filename)[0]
