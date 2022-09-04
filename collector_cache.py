@@ -139,7 +139,8 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
             file_name = utils.slugify_file_pah(file_name) + '.csv'
             cache_file_name = os.path.join(read_dir, file_name)
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False, write_empty)
-            new_file_names.append(cache_file_name)
+            if os.path.isfile(cache_file_name):
+                new_file_names.append(cache_file_name)
 
     # catalog = read_cache_catalog(use_library_dir)
     # for file in new_file_names:
