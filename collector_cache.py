@@ -76,7 +76,8 @@ def get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, us
         cached_playlists = read_cache_catalog(use_library_dir)
     else:
         cached_playlists = get_cached_playlists_dict(use_library_dir)
-    new_playlists = []
+
+    to_download_playlists = []
     exist_playlists = []
     overwritten_playlists = []
 
@@ -111,19 +112,19 @@ def get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, us
                 click.echo("Cant delete file: " + file_name)
                 pass
 
-        new_playlists.append(playlist_id)
-    return cached_playlists, exist_playlists, new_playlists, overwritten_playlists
+        to_download_playlists.append(playlist_id)
+    return cached_playlists, exist_playlists, to_download_playlists, overwritten_playlists
 
 
 def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False, expired_min=0,
                      read_catalog=True):
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
-    cached_playlists, exist_playlists, new_playlists, overwritten_playlists \
+    cached_playlists, exist_playlists, to_download_playlists, overwritten_playlists \
         = get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, use_library_dir, read_catalog)
 
-    new_file_names = []
-    with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
+    downloaded_file_names = []
+    with click.progressbar(to_download_playlists, label=f'Collecting info for {len(to_download_playlists)} playlists') as bar:
         for playlist_id in bar:
             playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id, False)
             if playlist is None:
@@ -140,15 +141,15 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
             cache_file_name = os.path.join(read_dir, file_name)
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False, write_empty)
             if os.path.isfile(cache_file_name):
-                new_file_names.append(cache_file_name)
+                downloaded_file_names.append(cache_file_name)
 
     # catalog = read_cache_catalog(use_library_dir)
     # for file in new_file_names:
     #     add_to_cache_catalog(catalog, file, use_library_dir)
     # write_cache_catalog(catalog, use_library_dir)
-    append_cache_catalog(new_file_names, use_library_dir)
+    append_cache_catalog(downloaded_file_names, use_library_dir)
 
-    return new_playlists, exist_playlists, overwritten_playlists, cached_playlists
+    return downloaded_file_names, exist_playlists, overwritten_playlists, cached_playlists
 
 
 def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False, write_empty=False,
@@ -159,9 +160,9 @@ def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exis
     for playlist in playlists:
         ids.append(playlist['id'])
 
-    new, old, overwritten, all_old \
+    downloaded, exist, overwritten, all_cached \
         = cache_add_by_ids(ids, use_library_dir, overwrite_exist, write_empty, expired_min, read_catalog)
-    return new, old, overwritten, all_old
+    return downloaded, exist, overwritten, all_cached
 
 
 def read_cached_playlists(use_library_dir=False):
