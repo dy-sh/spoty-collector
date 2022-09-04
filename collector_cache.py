@@ -124,7 +124,8 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
         = get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, use_library_dir, read_catalog)
 
     downloaded_file_names = []
-    with click.progressbar(to_download_playlists, label=f'Collecting info for {len(to_download_playlists)} playlists') as bar:
+    with click.progressbar(to_download_playlists,
+                           label=f'Collecting info for {len(to_download_playlists)} playlists') as bar:
         for playlist_id in bar:
             playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id, False)
             if playlist is None:
@@ -154,7 +155,7 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
 
 def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False, write_empty=False,
                       expired_min=0, read_catalog=True):
-    click.echo("Searching for playlists in Spotify...")
+    click.echo(f'Searching for playlists in Spotify using query: "{search_query}" ...')
     playlists = spotify_api.find_playlist_by_query(search_query, limit)
     ids = []
     for playlist in playlists:

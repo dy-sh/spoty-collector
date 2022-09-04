@@ -317,11 +317,12 @@ spoty plug collector cache-add "jazz"
     downloaded, exist, overwritten, all_was_cached = \
         cache.cache_add_by_name(search_query, limit, False, overwrite, False, expired_min, not no_catalog)
 
-    click.echo("\n======================================================================\n")
+    click.echo("-----------------------")
     click.echo(f'New cached playlists             : {len(downloaded) - len(overwritten)}')
     click.echo(f'Overwritten cached playlists     : {len(overwritten)}')
     click.echo(f'Skipped already cached playlists : {len(exist)}')
     click.echo(f'Total cached playlists           : {len(all_was_cached) + len(downloaded) - len(overwritten)}')
+    click.echo("\n")
 
 
 @collector.command("cache-add-id")
@@ -341,12 +342,12 @@ Cache playlist with specified id (save to csv files on disk).
     downloaded, exist, overwritten, all_was_cached = \
         cache.cache_add_by_ids(playlist_ids, False, overwrite, False, expired_min, not no_catalog)
 
-    click.echo("\n======================================================================\n")
+    click.echo("-----------------------")
     click.echo(f'New cached playlists             : {len(downloaded) - len(overwritten)}')
     click.echo(f'Overwritten cached playlists     : {len(overwritten)}')
     click.echo(f'Skipped already cached playlists : {len(exist)}')
     click.echo(f'Total cached playlists           : {len(all_was_cached) + len(downloaded) - len(overwritten)}')
-
+    click.echo("\n")
 
 @collector.command("info")
 @click.argument("playlist_ids", nargs=-1)
