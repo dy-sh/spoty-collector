@@ -5,3 +5,5 @@ listened.csv
 mirrors_log.txt
 cache.zip
 cache list.txt
+cache/cache.txt
+library_cache/cache.txt

@@ -29,9 +29,11 @@ THREADS_COUNT = settings.COLLECTOR.THREADS_COUNT
 
 cache_dir = os.path.join(current_directory, 'cache')
 cache_dir = os.path.abspath(cache_dir)
+cache_catalog_file_name = os.path.join(cache_dir, "cache.txt")
 
 library_cache_dir = os.path.join(current_directory, 'library_cache')
 library_cache_dir = os.path.abspath(library_cache_dir)
+library_cache_catalog_file_name = os.path.join(library_cache_dir, "cache.txt")
 
 mirror_playlist_prefix = settings.COLLECTOR.MIRROR_PLAYLISTS_PREFIX
 
@@ -64,22 +66,16 @@ def get_cached_playlists_dict(use_library_dir=False) -> dict[str, [str, str]]:
     return res
 
 
-def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False, write_empty=False,
-                      expired_min=0):
-    playlists = spotify_api.find_playlist_by_query(search_query, limit)
-    ids = []
-    for playlist in playlists:
-        ids.append(playlist['id'])
+def get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, use_library_dir, read_catalog):
+    if use_library_dir:
+        dir = library_cache_dir
+    else:
+        dir = cache_dir
 
-    new, old, overwritten, all_old = cache_add_by_ids(ids, use_library_dir, overwrite_exist, write_empty, expired_min)
-    return new, old, overwritten, all_old
-
-
-def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False, expired_min=0):
-    read_dir = library_cache_dir if use_library_dir else cache_dir
-
-    cached_playlists = get_cached_playlists_dict(use_library_dir)
-
+    if read_catalog:
+        cached_playlists = read_cache_catalog(use_library_dir)
+    else:
+        cached_playlists = get_cached_playlists_dict(use_library_dir)
     new_playlists = []
     exist_playlists = []
     overwritten_playlists = []
@@ -90,11 +86,17 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
                 exist_playlists.append(playlist_id)
                 continue
 
-            file_name = cached_playlists[playlist_id][1]
+            if read_catalog:
+                file_name = os.path.join(dir, cached_playlists[playlist_id][1] + '.csv')
+            else:
+                file_name = cached_playlists[playlist_id][1]
 
             if expired_min > 0:
                 try:
-                    file_date = os.path.getmtime(file_name) / 60
+                    if read_catalog:
+                        file_date = int(cached_playlists[playlist_id][0]) / 60
+                    else:
+                        file_date = os.path.getmtime(file_name) / 60
                     now = time.time() / 60
                     if now - file_date < expired_min:
                         exist_playlists.append(playlist_id)
@@ -106,11 +108,21 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
                 os.remove(file_name)
                 overwritten_playlists.append(playlist_id)
             except:
-                # click.echo("Cant delete file: " + file_name)
+                click.echo("Cant delete file: " + file_name)
                 pass
 
         new_playlists.append(playlist_id)
+    return cached_playlists, exist_playlists, new_playlists, overwritten_playlists
 
+
+def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False, expired_min=0,
+                     read_catalog=True):
+    read_dir = library_cache_dir if use_library_dir else cache_dir
+
+    cached_playlists, exist_playlists, new_playlists, overwritten_playlists \
+        = get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, use_library_dir, read_catalog)
+
+    new_file_names = []
     with click.progressbar(new_playlists, label=f'Collecting info for {len(new_playlists)} playlists') as bar:
         for playlist_id in bar:
             playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id, False)
@@ -127,8 +139,28 @@ def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False,
             file_name = utils.slugify_file_pah(file_name) + '.csv'
             cache_file_name = os.path.join(read_dir, file_name)
             csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False, write_empty)
+            new_file_names.append(cache_file_name)
+
+    # catalog = read_cache_catalog(use_library_dir)
+    # for file in new_file_names:
+    #     add_to_cache_catalog(catalog, file, use_library_dir)
+    # write_cache_catalog(catalog, use_library_dir)
+    append_cache_catalog(new_file_names, use_library_dir)
 
     return new_playlists, exist_playlists, overwritten_playlists, cached_playlists
+
+
+def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False, write_empty=False,
+                      expired_min=0, read_catalog=True):
+    click.echo("Searching for playlists in Spotify...")
+    playlists = spotify_api.find_playlist_by_query(search_query, limit)
+    ids = []
+    for playlist in playlists:
+        ids.append(playlist['id'])
+
+    new, old, overwritten, all_old \
+        = cache_add_by_ids(ids, use_library_dir, overwrite_exist, write_empty, expired_min, read_catalog)
+    return new, old, overwritten, all_old
 
 
 def read_cached_playlists(use_library_dir=False):
@@ -434,6 +466,9 @@ def cache_library_delete():
     for file_name in csvs_in_path:
         os.remove(file_name)
 
+    if os.path.isfile(library_cache_catalog_file_name):
+        os.remove(library_cache_catalog_file_name)
+
     click.echo(f"{len(csvs_in_path)} playlists removed.")
 
 
@@ -505,6 +540,8 @@ def cache_optimize():
                 bar.update(1000)
         bar.finish()
 
+    rescan_cache_catalog()
+
 
 def cache_optimize_multi():
     csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
@@ -550,6 +587,8 @@ def cache_optimize_multi():
         click.echo('Aborted.')
         sys.exit()
 
+    rescan_cache_catalog()
+
 
 def __cache_optimize_thread(csvs_in_path, part_index, parts_count, counter):
     files_num = 0
@@ -576,3 +615,87 @@ def __cache_optimize_thread(csvs_in_path, part_index, parts_count, counter):
             counter.value += 100
         if i + 1 == len(csvs_in_path):
             counter.value += (i % 100) + 1
+
+
+def rescan_cache_catalog():
+    csvs_in_path = csv_playlist.find_csvs_in_path(cache_dir)
+    catalog = {}
+    with click.progressbar(csvs_in_path, label=f'Collecting info for {len(csvs_in_path)} cached playlists') as bar:
+        for file_name in bar:
+            add_to_cache_catalog(catalog, file_name, False)
+    write_cache_catalog(catalog, False)
+
+    csvs_in_path = csv_playlist.find_csvs_in_path(library_cache_dir)
+    catalog = {}
+    with click.progressbar(csvs_in_path,
+                           label=f'Collecting info for {len(csvs_in_path)} library cached playlists') as bar:
+        for file_name in bar:
+            add_to_cache_catalog(catalog, file_name, True)
+    write_cache_catalog(catalog, True)
+
+
+def read_cache_catalog(use_library_dir=False) -> {}:
+    click.echo("Reading cache catalog...")
+    if use_library_dir:
+        file_name = library_cache_catalog_file_name
+    else:
+        file_name = cache_catalog_file_name
+    catalog = {}
+
+    if not os.path.isfile(file_name):
+        return catalog
+
+    with open(file_name) as f:
+        for line in f:
+            if len(line) < 2:
+                continue
+            s = line.split(',', 1)  # creation_time,relative_file_name
+            s[1] = s[1].rstrip()
+            base_name = s[1].split("\\")[-1]
+            id = base_name[:22]  # get id from first 22 characters of file name
+            catalog[id] = s
+    return catalog
+
+
+def write_cache_catalog(catalog, use_library_dir=False):
+    if use_library_dir:
+        file_name = library_cache_catalog_file_name
+    else:
+        file_name = cache_catalog_file_name
+    with open(file_name, "w") as cache_catalog_file:
+        for id, data in catalog.items():
+            file_date = data[0]
+            base_name = data[1]
+            cache_catalog_file.write(f"{file_date},{base_name}\n")
+
+
+def add_to_cache_catalog(catalog, cache_file_name, use_library_dir=False):
+    if use_library_dir:
+        dir = library_cache_dir
+    else:
+        dir = cache_dir
+    rel_filename = os.path.relpath(cache_file_name, dir)
+    rel_basename = os.path.splitext(rel_filename)[0]
+    base_name = os.path.splitext(os.path.basename(cache_file_name))[0]
+    id = os.path.basename(base_name)[:22]
+    file_date = int(os.path.getmtime(cache_file_name))
+    catalog[id] = [file_date, rel_basename]
+
+
+def append_cache_catalog(cache_file_names: List[str], use_library_dir=False):
+    if len(cache_file_names) == 0:
+        return
+
+    if use_library_dir:
+        dir = library_cache_dir
+        file_name = library_cache_catalog_file_name
+    else:
+        dir = cache_dir
+        file_name = cache_catalog_file_name
+
+    with open(file_name, "a") as cache_catalog_file:
+        for cache_file_name in cache_file_names:
+            rel_filename = os.path.relpath(cache_file_name, dir)
+            rel_basename = os.path.splitext(rel_filename)[0]
+            file_date = int(os.path.getmtime(cache_file_name))
+            cache_catalog_file.write(f"{file_date},{rel_basename}\n")

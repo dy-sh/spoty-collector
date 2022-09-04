@@ -301,8 +301,10 @@ def print_playlist_info(info: PlaylistInfo, index: int = None, count: int = None
               help='Limit the number of processed playlists (max 1000 due to spotify api limit).')
 @click.option('--expired-min', '--e', type=int, default=0, show_default=True,
               help='Overwrite only if the file was created more than the specified number of minutes ago.')
+@click.option('--no-catalog', '-C', is_flag=True,
+              help='Scan directory and read cached files instead of reading catalog file.')
 @click.argument("search_query")
-def cache_add(search_query, limit, overwrite, expired_min):
+def cache_add(search_query, limit, overwrite, expired_min, no_catalog):
     """
 \b
 Find public playlists by specified search query and cache them (save to csv files on disk).
@@ -312,7 +314,8 @@ Example:
 spoty plug collector cache-add "jazz"
     """
 
-    new, old, overwritten, all_old = cache.cache_add_by_name(search_query, limit, False, overwrite, False, expired_min)
+    new, old, overwritten, all_old = cache.cache_add_by_name(search_query, limit, False, overwrite, False, expired_min,
+                                                             not no_catalog)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists             : {len(new) - len(overwritten)}')
@@ -326,14 +329,17 @@ spoty plug collector cache-add "jazz"
               help='Overwrite exist cached playlists.')
 @click.option('--expired-min', '--e', type=int, default=0, show_default=True,
               help='Overwrite only if the file was created more than the specified number of minutes ago.')
+@click.option('--no-catalog', '-C', is_flag=True,
+              help='Scan directory and read cached files instead of reading catalog file.')
 @click.argument("playlist_ids", nargs=-1)
-def cache_add_id(playlist_ids, overwrite, expired_min):
+def cache_add_id(playlist_ids, overwrite, expired_min, no_catalog):
     """
 Cache playlist with specified id (save to csv files on disk).
     """
 
     playlist_ids = spoty.utils.tuple_to_list(playlist_ids)
-    new, old, overwritten, all_old = cache.cache_add_by_ids(playlist_ids, False, overwrite, False, expired_min)
+    new, old, overwritten, all_old = cache.cache_add_by_ids(playlist_ids, False, overwrite, False, expired_min,
+                                                            not no_catalog)
 
     click.echo("\n======================================================================\n")
     click.echo(f'New cached playlists             : {len(new) - len(overwritten)}')
@@ -513,7 +519,15 @@ Use --cache-library to cache playlists.
 @collector.command("optimize-cache")
 def optimize_cache():
     """
-Split large cache folder to smallest folder for better performance.
+Rescan cache and split large cache folders to the smallest folders for better performance.
     """
     cache.cache_optimize_multi()
     click.echo(f'Cache optimized')
+
+
+@collector.command("cache-rescan")
+def rescan_cache():
+    """
+Rescan cache folder
+    """
+    cache.rescan_cache_catalog()
