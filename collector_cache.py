@@ -79,7 +79,7 @@ def get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, us
 
     to_download_playlists = []
     exist_playlists = []
-    overwritten_playlists = []
+    to_overwrite_playlists = {}
 
     for playlist_id in playlist_ids:
         if playlist_id in cached_playlists:
@@ -105,52 +105,68 @@ def get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, us
                 except:
                     pass
 
-            try:
-                os.remove(file_name)
-                overwritten_playlists.append(playlist_id)
-            except:
-                click.echo("Cant delete file: " + file_name)
-                pass
+            to_overwrite_playlists[playlist_id]=file_name
 
         to_download_playlists.append(playlist_id)
-    return cached_playlists, exist_playlists, to_download_playlists, overwritten_playlists
+    return cached_playlists, exist_playlists, to_download_playlists, to_overwrite_playlists
 
 
 def cache_add_by_ids(playlist_ids, use_library_dir=False, overwrite_exist=False, write_empty=False, expired_min=0,
                      read_catalog=True):
     read_dir = library_cache_dir if use_library_dir else cache_dir
 
-    cached_playlists, exist_playlists, to_download_playlists, overwritten_playlists \
+    cached_playlists, exist_playlists, to_download_playlists, to_overwrite_playlists \
         = get_expired_and_new_playlists(expired_min, overwrite_exist, playlist_ids, use_library_dir, read_catalog)
 
     downloaded_file_names = []
-    with click.progressbar(to_download_playlists,
-                           label=f'Collecting info for {len(to_download_playlists)} playlists') as bar:
-        for playlist_id in bar:
-            playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id, False)
-            if playlist is None:
-                continue
-            tracks = playlist["tracks"]["items"]
-            tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
-            tags_list = utils.get_only_tags(tags_list,
-                                            ['SPOTY_LENGTH', 'SPOTIFY_TRACK_ID', 'SPOTIFY_ALBUM_ID', 'ISRC', 'ARTIST',
-                                             'TITLE', 'ALBUM', 'YEAR'])
-            file_name = playlist['id'] + " " + playlist['name']
-            if len(file_name) > 120:
-                file_name = (file_name[:120] + '..')
-            file_name = utils.slugify_file_pah(file_name) + '.csv'
-            cache_file_name = os.path.join(read_dir, file_name)
-            csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False, write_empty)
-            if os.path.isfile(cache_file_name):
-                downloaded_file_names.append(cache_file_name)
 
-    # catalog = read_cache_catalog(use_library_dir)
-    # for file in new_file_names:
-    #     add_to_cache_catalog(catalog, file, use_library_dir)
-    # write_cache_catalog(catalog, use_library_dir)
-    append_cache_catalog(downloaded_file_names, use_library_dir)
+    if use_library_dir:
+        dir = library_cache_dir
+        file_name = library_cache_catalog_file_name
+    else:
+        dir = cache_dir
+        file_name = cache_catalog_file_name
 
-    return downloaded_file_names, exist_playlists, overwritten_playlists, cached_playlists
+    with open(file_name, "a", encoding='utf-8-sig') as cache_catalog_file:
+        with click.progressbar(to_download_playlists,
+                               label=f'Collecting info for {len(to_download_playlists)} playlists') as bar:
+            for playlist_id in bar:
+                playlist = spotify_api.get_playlist_with_full_list_of_tracks(playlist_id, False)
+                if playlist is None:
+                    continue
+                tracks = playlist["tracks"]["items"]
+                tags_list = spotify_api.read_tags_from_spotify_tracks(tracks)
+                tags_list = utils.get_only_tags(tags_list,
+                                                ['SPOTY_LENGTH', 'SPOTIFY_TRACK_ID', 'SPOTIFY_ALBUM_ID', 'ISRC', 'ARTIST',
+                                                 'TITLE', 'ALBUM', 'YEAR'])
+                file_name = playlist['id'] + " " + playlist['name']
+                if len(file_name) > 120:
+                    file_name = (file_name[:120] + '..')
+                file_name = utils.slugify_file_pah(file_name) + '.csv'
+                cache_file_name = os.path.join(read_dir, file_name)
+
+                # delete old file
+                if playlist_id in to_overwrite_playlists:
+                    try:
+                        os.remove(to_overwrite_playlists[playlist_id])
+                    except:
+                        click.echo(f'\nCant delete file: "{file_name}"')
+                        pass
+
+                # write new file
+                csv_playlist.write_tags_to_csv(tags_list, cache_file_name, False, write_empty)
+
+                # append to cache catalog
+                if os.path.isfile(cache_file_name):
+                    downloaded_file_names.append(cache_file_name)
+                    rel_filename = os.path.relpath(cache_file_name, dir)
+                    rel_basename = os.path.splitext(rel_filename)[0]
+                    file_date = int(os.path.getmtime(cache_file_name))
+                    cache_catalog_file.write(f"{file_date},{rel_basename}\n")
+
+    # append_cache_catalog(downloaded_file_names, use_library_dir)
+
+    return downloaded_file_names, exist_playlists, to_overwrite_playlists, cached_playlists
 
 
 def cache_add_by_name(search_query, limit, use_library_dir=False, overwrite_exist=False, write_empty=False,
